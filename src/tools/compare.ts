@@ -144,6 +144,9 @@ function formatComparison(
       m.metadata.isOpenSource ? "Yes" : "No"
     ))
   );
+  rows.push(
+    row("Released", models.map((m) => m.metadata.releaseDate ?? "n/a"))
+  );
 
   lines.push(header);
   lines.push(sep);

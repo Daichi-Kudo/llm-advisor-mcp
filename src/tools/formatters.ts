@@ -67,11 +67,17 @@ export function formatModelDetail(model: UnifiedModel, fetchedAt?: number): stri
 
   lines.push(`## ${model.id}`);
   lines.push("");
-  lines.push(
-    `**Provider**: ${model.metadata.provider} | ` +
-    `**Modality**: ${fmtModalities(model.capabilities.inputModalities)}→${fmtModalities(model.capabilities.outputModalities)}` +
-    (model.metadata.isOpenSource ? " | **Open Source**" : "")
-  );
+  const metaParts = [
+    `**Provider**: ${model.metadata.provider}`,
+    `**Modality**: ${fmtModalities(model.capabilities.inputModalities)}→${fmtModalities(model.capabilities.outputModalities)}`,
+  ];
+  if (model.metadata.releaseDate) {
+    metaParts.push(`**Released**: ${model.metadata.releaseDate}`);
+  }
+  if (model.metadata.isOpenSource) {
+    metaParts.push("**Open Source**");
+  }
+  lines.push(metaParts.join(" | "));
 
   // Pricing
   lines.push("");
@@ -148,7 +154,7 @@ export function formatTopList(
   lines.push(`## Top ${Math.min(models.length, limit)}: ${category}`);
   lines.push("");
 
-  const headers = ["#", "Model", "Key Score", "Input $/1M", "Output $/1M", "Context"];
+  const headers = ["#", "Model", "Key Score", "Input $/1M", "Output $/1M", "Context", "Released"];
   const rows = models.slice(0, limit).map((m, i) => [
     String(i + 1),
     m.id,
@@ -156,6 +162,7 @@ export function formatTopList(
     fmtPrice(m.pricing.input),
     fmtPrice(m.pricing.output),
     fmtContext(m.capabilities.contextLength),
+    m.metadata.releaseDate ?? "n/a",
   ]);
 
   lines.push(buildMarkdownTable(headers, rows, limit));

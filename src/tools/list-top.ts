@@ -37,8 +37,12 @@ export function registerListTopTool(
         .number()
         .optional()
         .describe("Minimum context window in tokens"),
+      min_release_date: z
+        .string()
+        .optional()
+        .describe("Minimum release date (YYYY-MM-DD). Excludes older models"),
     },
-    async ({ category, limit, min_context }) => {
+    async ({ category, limit, min_context, min_release_date }) => {
       await registry.ensureLoaded();
 
       const effectiveLimit = limit ?? 10;
@@ -47,6 +51,12 @@ export function registerListTopTool(
       if (min_context) {
         models = models.filter(
           (m) => m.capabilities.contextLength >= min_context
+        );
+      }
+
+      if (min_release_date) {
+        models = models.filter(
+          (m) => m.metadata.releaseDate !== undefined && m.metadata.releaseDate >= min_release_date
         );
       }
 

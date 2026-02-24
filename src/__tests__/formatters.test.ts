@@ -120,4 +120,16 @@ describe("formatModelDetail", () => {
     expect(output).toContain("Reasoning");
     expect(output).toContain("Vision");
   });
+
+  it("shows release date when present", () => {
+    const output = formatModelDetail(makeModel({
+      metadata: { provider: "anthropic", family: "claude", isOpenSource: false, releaseDate: "2026-01-15" },
+    }));
+    expect(output).toContain("**Released**: 2026-01-15");
+  });
+
+  it("omits release date when absent", () => {
+    const output = formatModelDetail(makeModel());
+    expect(output).not.toContain("Released");
+  });
 });

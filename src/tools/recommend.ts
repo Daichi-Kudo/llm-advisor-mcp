@@ -40,6 +40,10 @@ export function registerRecommendTool(
         .boolean()
         .optional()
         .describe("Require open-source license"),
+      min_release_date: z
+        .string()
+        .optional()
+        .describe("Minimum release date (YYYY-MM-DD). Excludes older models"),
     },
     async ({
       use_case,
@@ -49,6 +53,7 @@ export function registerRecommendTool(
       require_vision,
       require_tools,
       require_open_source,
+      min_release_date,
     }) => {
       await registry.ensureLoaded();
 
@@ -76,6 +81,11 @@ export function registerRecommendTool(
       }
       if (require_open_source) {
         candidates = candidates.filter((m) => m.metadata.isOpenSource);
+      }
+      if (min_release_date) {
+        candidates = candidates.filter(
+          (m) => m.metadata.releaseDate !== undefined && m.metadata.releaseDate >= min_release_date
+        );
       }
 
       if (candidates.length === 0) {
@@ -125,7 +135,22 @@ function computeScore(model: UnifiedModel, useCase: UseCase): number {
   if (model.capabilities.supportsReasoning) score += 2;
   if (model.capabilities.contextLength >= 200_000) score += 2;
 
+  // Freshness bonus (small tiebreaker)
+  score += computeFreshnessBonus(model.metadata.releaseDate);
+
   return score;
+}
+
+/** Small bonus for recently released models */
+export function computeFreshnessBonus(releaseDate?: string): number {
+  if (!releaseDate) return 0;
+  const released = new Date(releaseDate).getTime();
+  if (isNaN(released)) return 0;
+  const ageMs = Date.now() - released;
+  const ageDays = ageMs / (1000 * 60 * 60 * 24);
+  if (ageDays <= 90) return 3;   // Last 3 months
+  if (ageDays <= 180) return 1;  // Last 6 months
+  return 0;
 }
 
 interface Weights {
@@ -199,6 +224,9 @@ function formatRecommendations(
     parts.push(`Input: ${fmtPrice(model.pricing.input)}/1M`);
     parts.push(`Output: ${fmtPrice(model.pricing.output)}/1M`);
     parts.push(`Context: ${fmtContext(model.capabilities.contextLength)}`);
+    if (model.metadata.releaseDate) {
+      parts.push(`Released: ${model.metadata.releaseDate}`);
+    }
     lines.push(parts.join(" | "));
 
     // Key benchmarks for this use case
