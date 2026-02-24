@@ -11,7 +11,7 @@ import { registerRecommendTool } from "./tools/recommend.js";
 
 const server = new McpServer({
   name: "llm-advisor-mcp",
-  version: "0.3.0",
+  version: "0.3.1",
 });
 
 const cache = new InMemoryCache();
