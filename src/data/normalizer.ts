@@ -1,6 +1,8 @@
 import type { UnifiedModel } from "../types.js";
 import type { SweBenchEntry } from "./fetchers/swe-bench.js";
 import type { ArenaEntry } from "./fetchers/arena.js";
+import type { VlmEntry } from "./fetchers/vlm-leaderboard.js";
+import type { AiderEntry } from "./fetchers/aider.js";
 
 /**
  * Normalize a model name to a canonical key for cross-source matching.
@@ -69,13 +71,15 @@ function generateMatchKeys(name: string): string[] {
 }
 
 /**
- * Merge benchmark data from SWE-bench and Arena into the model registry.
+ * Merge benchmark data from all sources into the model registry.
  * Uses normalized keys for cross-source matching.
  */
 export function mergeBenchmarkData(
   models: Map<string, UnifiedModel>,
   sweScores: Map<string, SweBenchEntry>,
-  arenaScores: Map<string, ArenaEntry>
+  arenaScores: Map<string, ArenaEntry>,
+  vlmScores?: Map<string, VlmEntry>,
+  aiderScores?: Map<string, AiderEntry>
 ): void {
   // Build a reverse lookup: normalizedKey → OpenRouter model ID
   const keyToId = new Map<string, string>();
@@ -97,7 +101,6 @@ export function mergeBenchmarkData(
     const model = models.get(matchedId);
     if (!model) continue;
 
-    // Only update if this score is better than existing
     if (
       !model.benchmarks.sweBenchVerified ||
       sweEntry.resolved > model.benchmarks.sweBenchVerified
@@ -114,12 +117,56 @@ export function mergeBenchmarkData(
     const model = models.get(matchedId);
     if (!model) continue;
 
-    // Only update if this is a higher score (or no existing score)
     if (
       !model.benchmarks.arenaElo ||
       arenaEntry.arenaScore > model.benchmarks.arenaElo
     ) {
       model.benchmarks.arenaElo = arenaEntry.arenaScore;
+    }
+  }
+
+  // Merge VLM scores (only for vision-capable models)
+  if (vlmScores) {
+    for (const [, vlmEntry] of vlmScores) {
+      const matchedId = findMatch(vlmEntry.name, keyToId);
+      if (!matchedId) continue;
+
+      const model = models.get(matchedId);
+      if (!model) continue;
+
+      if (vlmEntry.mmmu !== undefined && (!model.benchmarks.mmmu || vlmEntry.mmmu > model.benchmarks.mmmu)) {
+        model.benchmarks.mmmu = vlmEntry.mmmu;
+      }
+      if (vlmEntry.mmBench !== undefined && (!model.benchmarks.mmBench || vlmEntry.mmBench > model.benchmarks.mmBench)) {
+        model.benchmarks.mmBench = vlmEntry.mmBench;
+      }
+      if (vlmEntry.ocrBench !== undefined && (!model.benchmarks.ocrBench || vlmEntry.ocrBench > model.benchmarks.ocrBench)) {
+        model.benchmarks.ocrBench = vlmEntry.ocrBench;
+      }
+      if (vlmEntry.ai2d !== undefined && (!model.benchmarks.ai2d || vlmEntry.ai2d > model.benchmarks.ai2d)) {
+        model.benchmarks.ai2d = vlmEntry.ai2d;
+      }
+      if (vlmEntry.mathVista !== undefined && (!model.benchmarks.mathVista || vlmEntry.mathVista > model.benchmarks.mathVista)) {
+        model.benchmarks.mathVista = vlmEntry.mathVista;
+      }
+    }
+  }
+
+  // Merge Aider Polyglot scores
+  if (aiderScores) {
+    for (const [, aiderEntry] of aiderScores) {
+      const matchedId = findMatch(aiderEntry.name, keyToId);
+      if (!matchedId) continue;
+
+      const model = models.get(matchedId);
+      if (!model) continue;
+
+      if (
+        !model.benchmarks.aiderPolyglot ||
+        aiderEntry.passRate2 > model.benchmarks.aiderPolyglot
+      ) {
+        model.benchmarks.aiderPolyglot = aiderEntry.passRate2;
+      }
     }
   }
 }

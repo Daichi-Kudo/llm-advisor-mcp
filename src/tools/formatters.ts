@@ -107,6 +107,20 @@ export function formatModelDetail(model: UnifiedModel, fetchedAt?: number): stri
     }
   }
 
+  // Percentile ranks (only non-null)
+  const percEntries = Object.entries(model.percentiles).filter(
+    ([, v]) => v !== undefined && v !== null
+  );
+  if (percEntries.length > 0) {
+    lines.push("");
+    lines.push("### Percentile Ranks");
+    lines.push("| Category | Percentile |");
+    lines.push("|----------|------------|");
+    for (const [key, value] of percEntries) {
+      lines.push(`| ${percentileLabel(key)} | P${value} |`);
+    }
+  }
+
   // Capabilities
   const caps: string[] = [];
   if (model.capabilities.supportsTools) caps.push("Tools");
@@ -167,6 +181,18 @@ function benchmarkLabel(key: string): string {
     ocrBench: "OCRBench",
     ai2d: "AI2D",
     mathVista: "MathVista",
+  };
+  return labels[key] ?? key;
+}
+
+/** Human-readable percentile category label */
+function percentileLabel(key: string): string {
+  const labels: Record<string, string> = {
+    coding: "Coding",
+    math: "Math & Reasoning",
+    general: "General",
+    vision: "Vision",
+    costEfficiency: "Cost Efficiency",
   };
   return labels[key] ?? key;
 }

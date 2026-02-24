@@ -3,7 +3,10 @@ import { InMemoryCache } from "./cache.js";
 import { fetchOpenRouterModels } from "./fetchers/openrouter.js";
 import { fetchSweBenchScores } from "./fetchers/swe-bench.js";
 import { fetchArenaScores } from "./fetchers/arena.js";
+import { fetchVlmScores } from "./fetchers/vlm-leaderboard.js";
+import { fetchAiderScores } from "./fetchers/aider.js";
 import { mergeBenchmarkData } from "./normalizer.js";
+import { computePercentiles } from "./percentiles.js";
 
 export class ModelRegistry {
   private models = new Map<string, UnifiedModel>();
@@ -29,12 +32,17 @@ export class ModelRegistry {
     }
 
     // Phase 2: Enrich with benchmark data (best-effort, parallel)
-    const [sweScores, arenaScores] = await Promise.all([
+    const [sweScores, arenaScores, vlmScores, aiderScores] = await Promise.all([
       fetchSweBenchScores(this.cache).catch(() => new Map()),
       fetchArenaScores(this.cache).catch(() => new Map()),
+      fetchVlmScores(this.cache).catch(() => new Map()),
+      fetchAiderScores(this.cache).catch(() => new Map()),
     ]);
 
-    mergeBenchmarkData(this.models, sweScores, arenaScores);
+    mergeBenchmarkData(this.models, sweScores, arenaScores, vlmScores, aiderScores);
+
+    // Phase 3: Compute percentile ranks across all models
+    computePercentiles(this.models);
   }
 
   /** Ensure data is loaded, refreshing if needed */

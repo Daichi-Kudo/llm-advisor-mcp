@@ -10,7 +10,7 @@ LLMs like Claude and Gemini have knowledge cutoffs. When you ask "what's the bes
 
 **Key differentiators** vs existing MCPs:
 - **Low-token output** — Markdown tables, not raw JSON (~300 tokens vs ~3000)
-- **Multi-source benchmarks** — SWE-bench + Arena Elo, merged into one view
+- **Multi-source benchmarks** — SWE-bench + Arena Elo + VLM (MMMU, MMBench) + Aider Polyglot, merged into one view
 - **Personalized recommendations** — Use case + budget + requirements → Top 3 picks
 - **Side-by-side comparison** — Compare 2-5 models with best-value highlighting
 - **API usage examples** — Ready-to-use code in Python/curl
@@ -71,7 +71,16 @@ Get detailed info about a specific model.
 | Benchmark | Score |
 |-----------|-------|
 | SWE-bench Verified | 75.6% |
+| Aider Polyglot | 82.0% |
 | Arena Elo | 1504 |
+| MMMU | 78.3% |
+
+### Percentile Ranks
+| Category | Percentile |
+|----------|------------|
+| Coding | P97 |
+| General | P98 |
+| Vision | P92 |
 
 **Capabilities**: Tools, Reasoning, Vision
 ```
@@ -174,12 +183,14 @@ All data is fetched in real-time from free, public APIs:
 | [OpenRouter](https://openrouter.ai/api/v1/models) | 336+ models: pricing, context, modalities | None |
 | [SWE-bench](https://github.com/SWE-bench/swe-bench.github.io) | Coding benchmark (Verified leaderboard) | None |
 | [LM Arena](https://arena.ai) | Human preference Elo ratings (314+ models) | None |
+| [OpenCompass VLM](https://opencompass.org.cn) | Vision benchmarks: MMMU, MMBench, OCRBench, AI2D, MathVista (284+ models) | None |
+| [Aider Polyglot](https://aider.chat/docs/leaderboards/) | Coding benchmark: multi-language pass rate (63+ models) | None |
 
 ## Roadmap
 
 - **v0.1**: `get_model_info` + `list_top_models` via OpenRouter
-- **v0.2** (current): `compare_models` + `recommend_model` + SWE-bench + Arena Elo integration
-- **v0.3**: VLM benchmarks (MMMU, MMBench) + Aider Polyglot + percentile ranks
+- **v0.2**: `compare_models` + `recommend_model` + SWE-bench + Arena Elo integration
+- **v0.3** (current): VLM benchmarks (MMMU, MMBench, OCRBench, AI2D, MathVista) + Aider Polyglot + percentile ranks + 43 unit tests
 - **v1.0**: Community contributions, weekly static data refresh via GitHub Actions
 
 ## Development
