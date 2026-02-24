@@ -156,7 +156,7 @@ function getWeights(useCase: UseCase): Weights {
 function getBenchmarkScore(model: UnifiedModel, useCase: UseCase): number {
   switch (useCase) {
     case "coding":
-      return model.benchmarks.sweBenchVerified ?? (model.benchmarks.arenaElo ? normalizeElo(model.benchmarks.arenaElo) : 0);
+      return model.benchmarks.sweBenchVerified ?? model.benchmarks.aiderPolyglot ?? (model.benchmarks.arenaElo ? normalizeElo(model.benchmarks.arenaElo) : 0);
     case "math":
     case "reasoning":
       return model.benchmarks.gpqaDiamond ?? model.benchmarks.math500 ?? (model.benchmarks.arenaElo ? normalizeElo(model.benchmarks.arenaElo) : 0);
@@ -205,6 +205,9 @@ function formatRecommendations(
     const benchParts: string[] = [];
     if (model.benchmarks.sweBenchVerified) {
       benchParts.push(`SWE-bench: ${fmtScore(model.benchmarks.sweBenchVerified)}`);
+    }
+    if (model.benchmarks.aiderPolyglot) {
+      benchParts.push(`Aider: ${fmtScore(model.benchmarks.aiderPolyglot)}`);
     }
     if (model.benchmarks.arenaElo) {
       benchParts.push(`Arena: ${fmtElo(model.benchmarks.arenaElo)}`);

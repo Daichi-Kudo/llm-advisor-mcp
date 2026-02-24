@@ -1,4 +1,4 @@
-import type { UnifiedModel, BenchmarkScores } from "../types.js";
+import type { UnifiedModel } from "../types.js";
 
 /**
  * Compute percentile ranks for all models across five categories.

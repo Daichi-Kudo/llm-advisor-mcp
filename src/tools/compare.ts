@@ -107,6 +107,7 @@ function formatComparison(
   // Benchmarks — only show rows where at least one model has data
   const benchmarks: [string, (m: UnifiedModel) => string][] = [
     ["SWE-bench", (m) => fmtScore(m.benchmarks.sweBenchVerified)],
+    ["Aider Polyglot", (m) => fmtScore(m.benchmarks.aiderPolyglot)],
     ["Arena Elo", (m) => fmtElo(m.benchmarks.arenaElo)],
     ["MMLU-Pro", (m) => fmtScore(m.benchmarks.mmluPro)],
     ["GPQA Diamond", (m) => fmtScore(m.benchmarks.gpqaDiamond)],
