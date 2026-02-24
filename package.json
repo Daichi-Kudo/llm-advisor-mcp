@@ -1,6 +1,6 @@
 {
   "name": "llm-advisor-mcp",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "MCP server for LLM/VLM model selection — compare 336+ models with real-time benchmarks, pricing, and personalized recommendations. No API key required.",
   "type": "module",
   "bin": {
