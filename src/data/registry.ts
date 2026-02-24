@@ -54,28 +54,36 @@ export class ModelRegistry {
 
   /** Get a model by exact ID or fuzzy match */
   getModel(query: string): UnifiedModel | null {
-    // 1. Exact match
+    // 1. Exact match by full ID
     const exact = this.models.get(query);
     if (exact) return exact;
 
-    // 2. Case-insensitive exact match
     const queryLower = query.toLowerCase();
+    const querySlug = queryLower.replace(/[^a-z0-9/\-]/g, "");
+
+    // 2. Case-insensitive exact match
     for (const [id, model] of this.models) {
       if (id.toLowerCase() === queryLower) return model;
     }
 
-    // 3. Slug contains match
-    for (const [, model] of this.models) {
-      if (model.slug.includes(queryLower.replace(/[^a-z0-9/\-]/g, ""))) {
-        return model;
-      }
+    // 3. Exact match on model part only (without provider prefix)
+    //    e.g. "gpt-4o" matches "openai/gpt-4o" exactly
+    for (const [id, model] of this.models) {
+      const modelPart = id.split("/").slice(1).join("/").toLowerCase();
+      if (modelPart === queryLower || modelPart === querySlug) return model;
     }
 
-    // 4. Name contains match
+    // 4. Contains match — prefer shortest ID (closest match)
+    //    e.g. "gpt-4o" matches "openai/gpt-4o" over "openai/gpt-4o-audio-preview"
+    const candidates: UnifiedModel[] = [];
     for (const [, model] of this.models) {
-      if (model.name.toLowerCase().includes(queryLower)) {
-        return model;
+      if (model.slug.includes(querySlug) || model.name.toLowerCase().includes(queryLower)) {
+        candidates.push(model);
       }
+    }
+    if (candidates.length > 0) {
+      candidates.sort((a, b) => a.id.length - b.id.length);
+      return candidates[0];
     }
 
     return null;

@@ -84,7 +84,7 @@ describe("mergeBenchmarkData", () => {
     models.set("anthropic/claude-opus-4.6", makeModel("anthropic/claude-opus-4.6", "Claude Opus 4.6"));
 
     const sweScores = new Map<string, SweBenchEntry>();
-    sweScores.set("claude-opus-4-6", { name: "Claude Opus 4-6", resolved: 72.0, total: 500 });
+    sweScores.set("claude-opus-4-6", { name: "Claude Opus 4-6", resolved: 72.0, date: "2025-01-01" });
 
     mergeBenchmarkData(models, sweScores, new Map());
 
@@ -96,7 +96,7 @@ describe("mergeBenchmarkData", () => {
     models.set("openai/gpt-5.2", makeModel("openai/gpt-5.2", "GPT-5.2"));
 
     const arenaScores = new Map<string, ArenaEntry>();
-    arenaScores.set("gpt-5.2", { name: "GPT-5.2", arenaScore: 1350, ci95Upper: 1360, ci95Lower: 1340 });
+    arenaScores.set("gpt-5.2", { name: "GPT-5.2", arenaScore: 1350, ciUpper: 1360, ciLower: 1340 });
 
     mergeBenchmarkData(models, new Map(), arenaScores);
 
@@ -137,7 +137,7 @@ describe("mergeBenchmarkData", () => {
     models.set("anthropic/claude-opus-4.6", m);
 
     const sweScores = new Map<string, SweBenchEntry>();
-    sweScores.set("claude-opus-4-6", { name: "Claude Opus 4-6", resolved: 72.0, total: 500 });
+    sweScores.set("claude-opus-4-6", { name: "Claude Opus 4-6", resolved: 72.0, date: "2025-01-01" });
 
     mergeBenchmarkData(models, sweScores, new Map());
 
@@ -152,7 +152,7 @@ describe("mergeBenchmarkData", () => {
     models.set("anthropic/claude-opus-4.6", m);
 
     const sweScores = new Map<string, SweBenchEntry>();
-    sweScores.set("claude-opus-4-6", { name: "Claude Opus 4-6", resolved: 70.0, total: 500 });
+    sweScores.set("claude-opus-4-6", { name: "Claude Opus 4-6", resolved: 70.0, date: "2025-01-01" });
 
     mergeBenchmarkData(models, sweScores, new Map());
 
