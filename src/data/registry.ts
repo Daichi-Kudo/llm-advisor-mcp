@@ -1,6 +1,9 @@
 import type { UnifiedModel, ModelCategory, BenchmarkScores } from "../types.js";
 import { InMemoryCache } from "./cache.js";
 import { fetchOpenRouterModels } from "./fetchers/openrouter.js";
+import { fetchSweBenchScores } from "./fetchers/swe-bench.js";
+import { fetchArenaScores } from "./fetchers/arena.js";
+import { mergeBenchmarkData } from "./normalizer.js";
 
 export class ModelRegistry {
   private models = new Map<string, UnifiedModel>();
@@ -19,10 +22,19 @@ export class ModelRegistry {
   }
 
   private async _loadData(): Promise<void> {
+    // Phase 1: Load base model data from OpenRouter (required)
     const openRouterModels = await fetchOpenRouterModels(this.cache);
     for (const model of openRouterModels) {
       this.models.set(model.id, model);
     }
+
+    // Phase 2: Enrich with benchmark data (best-effort, parallel)
+    const [sweScores, arenaScores] = await Promise.all([
+      fetchSweBenchScores(this.cache).catch(() => new Map()),
+      fetchArenaScores(this.cache).catch(() => new Map()),
+    ]);
+
+    mergeBenchmarkData(this.models, sweScores, arenaScores);
   }
 
   /** Ensure data is loaded, refreshing if needed */

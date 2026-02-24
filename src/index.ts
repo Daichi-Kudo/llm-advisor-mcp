@@ -6,10 +6,12 @@ import { InMemoryCache } from "./data/cache.js";
 import { ModelRegistry } from "./data/registry.js";
 import { registerModelInfoTool } from "./tools/model-info.js";
 import { registerListTopTool } from "./tools/list-top.js";
+import { registerCompareTool } from "./tools/compare.js";
+import { registerRecommendTool } from "./tools/recommend.js";
 
 const server = new McpServer({
   name: "llm-advisor-mcp",
-  version: "0.1.0",
+  version: "0.2.0",
 });
 
 const cache = new InMemoryCache();
@@ -18,6 +20,8 @@ const registry = new ModelRegistry(cache);
 // Register tools
 registerModelInfoTool(server, registry);
 registerListTopTool(server, registry);
+registerCompareTool(server, registry);
+registerRecommendTool(server, registry);
 
 // Graceful shutdown
 process.on("SIGINT", () => {
