@@ -1,7 +1,7 @@
 {
   "name": "llm-advisor-mcp",
   "version": "0.4.0",
-  "description": "MCP server for LLM/VLM model selection — benchmarks, pricing, and recommendations with low-token output",
+  "description": "MCP server for LLM/VLM model selection — compare 336+ models with real-time benchmarks, pricing, and personalized recommendations. No API key required.",
   "type": "module",
   "bin": {
     "llm-advisor-mcp": "./dist/index.js"
@@ -18,18 +18,32 @@
   },
   "keywords": [
     "mcp",
+    "mcp-server",
     "model-context-protocol",
     "llm",
     "vlm",
+    "ai",
+    "ai-models",
     "model-selection",
+    "model-comparison",
+    "model-recommendation",
     "benchmarks",
     "pricing",
     "swe-bench",
     "aider",
     "opencompass",
-    "percentile",
-    "ai-models"
+    "arena-elo",
+    "openrouter",
+    "claude-code"
   ],
+  "homepage": "https://github.com/Daichi-Kudo/llm-advisor-mcp",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Daichi-Kudo/llm-advisor-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Daichi-Kudo/llm-advisor-mcp/issues"
+  },
   "author": "Cognisant LLC",
   "license": "MIT",
   "engines": {
