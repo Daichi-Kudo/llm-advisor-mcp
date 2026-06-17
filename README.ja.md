@@ -5,7 +5,7 @@
 [![CI](https://github.com/Daichi-Kudo/llm-advisor-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/Daichi-Kudo/llm-advisor-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js >= 18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
 [![Glama MCP server](https://glama.ai/mcp/servers/Daichi-Kudo/llm-advisor-mcp/badge)](https://glama.ai/mcp/servers/Daichi-Kudo/llm-advisor-mcp)
 
@@ -250,7 +250,7 @@ Strengths: tools, vision
 
 | ソース | データ内容 | モデル数 | 認証 |
 |--------|-----------|---------|------|
-| [OpenRouter](https://openrouter.ai/api/v1/models) | 価格、コンテキスト長、モダリティ、リリース日 | 336+ | 不要 |
+| [OpenRouter](https://openrouter.ai/api/v1/models) | 価格、コンテキスト長、モダリティ、リリース日 | 300+ | 不要 |
 | [SWE-bench](https://github.com/SWE-bench/swe-bench.github.io) | コーディングベンチマーク（Verified leaderboard） | 40+ | 不要 |
 | [LM Arena](https://arena.ai) | 人間選好Eloレーティング | 314+ | 不要 |
 | [OpenCompass VLM](https://opencompass.org.cn) | ビジョンベンチマーク（MMMU, MMBench, OCRBench, AI2D, MathVista） | 284+ | 不要 |
@@ -362,4 +362,4 @@ npm run test:watch     # テストウォッチモード
 
 ## ライセンス
 
-[MIT](LICENSE) - Cognisant LLC
+[MIT](LICENSE) — [Cognisant LLC](https://cognisant.io) が開発

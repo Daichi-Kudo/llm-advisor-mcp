@@ -5,7 +5,7 @@
 [![CI](https://github.com/Daichi-Kudo/llm-advisor-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/Daichi-Kudo/llm-advisor-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js >= 18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
 [![Glama MCP server](https://glama.ai/mcp/servers/Daichi-Kudo/llm-advisor-mcp/badge)](https://glama.ai/mcp/servers/Daichi-Kudo/llm-advisor-mcp)
 
@@ -244,7 +244,7 @@ All data is fetched in real time from free, public APIs. No authentication requi
 
 | Source | Data | Models | Cache TTL |
 |--------|------|--------|-----------|
-| [OpenRouter](https://openrouter.ai/api/v1/models) | Pricing, context lengths, modalities, release dates | 336+ | 1 hour |
+| [OpenRouter](https://openrouter.ai/api/v1/models) | Pricing, context lengths, modalities, release dates | 300+ | 1 hour |
 | [SWE-bench](https://github.com/SWE-bench/swe-bench.github.io) | Coding benchmark (Verified leaderboard) | 30+ | 6 hours |
 | [LM Arena](https://lmarena.ai) | Human preference Elo ratings | 314+ | 6 hours |
 | [OpenCompass VLM](https://opencompass.org.cn) | Vision benchmarks: MMMU, MMBench, OCRBench, AI2D, MathVista | 284+ | 6 hours |
@@ -363,4 +363,4 @@ src/
 
 ## License
 
-[MIT](LICENSE) -- Cognisant LLC
+[MIT](LICENSE) — built by [Cognisant LLC](https://cognisant.io)
