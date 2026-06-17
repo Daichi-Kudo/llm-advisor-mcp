@@ -48,7 +48,7 @@ export function normalizeKey(name: string): string {
  * Generate multiple matching keys for a model name to increase match rate.
  * Returns an array of keys sorted by specificity (most specific first).
  */
-function generateMatchKeys(name: string): string[] {
+export function generateMatchKeys(name: string): string[] {
   const primary = normalizeKey(name);
   const keys = [primary];
 
@@ -71,6 +71,26 @@ function generateMatchKeys(name: string): string[] {
 }
 
 /**
+ * Build a reverse lookup index (normalized key → OpenRouter model ID) from the
+ * model registry. Indexed by both model ID and display name, most-specific-first.
+ */
+export function buildKeyToId(
+  models: Map<string, UnifiedModel>
+): Map<string, string> {
+  const keyToId = new Map<string, string>();
+  for (const [id, model] of models) {
+    for (const key of generateMatchKeys(id)) {
+      if (!keyToId.has(key)) keyToId.set(key, id);
+    }
+    // Also index by display name
+    for (const key of generateMatchKeys(model.name)) {
+      if (!keyToId.has(key)) keyToId.set(key, id);
+    }
+  }
+  return keyToId;
+}
+
+/**
  * Merge benchmark data from all sources into the model registry.
  * Uses normalized keys for cross-source matching.
  */
@@ -82,16 +102,7 @@ export function mergeBenchmarkData(
   aiderScores?: Map<string, AiderEntry>
 ): void {
   // Build a reverse lookup: normalizedKey → OpenRouter model ID
-  const keyToId = new Map<string, string>();
-  for (const [id, model] of models) {
-    for (const key of generateMatchKeys(id)) {
-      if (!keyToId.has(key)) keyToId.set(key, id);
-    }
-    // Also index by display name
-    for (const key of generateMatchKeys(model.name)) {
-      if (!keyToId.has(key)) keyToId.set(key, id);
-    }
-  }
+  const keyToId = buildKeyToId(models);
 
   // Merge SWE-bench scores
   for (const [, sweEntry] of sweScores) {
@@ -174,7 +185,7 @@ export function mergeBenchmarkData(
 /**
  * Try to find a matching OpenRouter model ID for an external model name.
  */
-function findMatch(
+export function findMatch(
   externalName: string,
   keyToId: Map<string, string>
 ): string | null {
@@ -186,16 +197,27 @@ function findMatch(
     if (id) return id;
   }
 
-  // 2. Substring match: check if any candidate is contained in a key (or vice versa)
+  // 2. Substring match: check if any candidate is contained in a key (or vice versa).
+  //    BOTH sides must be ≥6 chars: a short indexed stem (e.g. "gpt", left over from
+  //    stripping "gpt-chat-latest" down to "gpt") would otherwise swallow unrelated
+  //    names like "PandaGPT-13B", "ShareGPT4V", or "MiniGPT-4".
   const primaryKey = candidates[0];
+  const primaryIsVision = hasVisionToken(primaryKey);
   for (const [indexedKey, id] of keyToId) {
-    if (
-      primaryKey.length >= 6 &&
-      (indexedKey.includes(primaryKey) || primaryKey.includes(indexedKey))
-    ) {
+    if (primaryKey.length < 6 || indexedKey.length < 6) continue;
+    if (indexedKey.includes(primaryKey) || primaryKey.includes(indexedKey)) {
+      // A vision-variant name (e.g. "deepseek-vl-7b") must not collapse onto a
+      // non-vision base model ("deepseek-chat" → stem "deepseek"); they are
+      // different models. The reverse (Qwen2.5-VL ↔ qwen2.5-vl-72b-instruct) is fine.
+      if (primaryIsVision && !hasVisionToken(indexedKey)) continue;
       return id;
     }
   }
 
   return null;
+}
+
+/** True if a normalized key carries a vision/VL model-line token. */
+function hasVisionToken(key: string): boolean {
+  return /(^|-)(vl\d*|vision)(-|$)/.test(key);
 }

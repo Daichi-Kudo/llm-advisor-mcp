@@ -4,9 +4,9 @@
 
 ## Current Version
 
-**v0.4.3** (published to npm + MCP Registry on 2026-06-17)
+**v0.4.4** (published to npm + MCP Registry on 2026-06-17)
 
-> v0.4.3 fixes a dead VLM data source (see Data Source Health).
+> v0.4.3: fixed dead VLM data source (see Data Source Health). v0.4.4: fixed VLM match mis-attribution + Glama badge + dev-dep bumps.
 > Traction: ~237 downloads/last-30d, ~68/last-7d, slowly rising (as of 2026-06-17).
 
 ## What This Is
@@ -37,36 +37,30 @@ MCP server that gives AI assistants real-time LLM/VLM knowledge — pricing, ben
 
 ## Discoverability / Distribution
 
-### Done
-- **GitHub**: 12 topics 設定済み, CI badge, bilingual README (EN + JA)
-- **npm**: 18 keywords, optimized description, homepage/repository/bugs fields
-- **GitHub Actions CI**: Node 18/20/22 matrix, passing
-- **Official MCP Registry**: `io.github.Daichi-Kudo/llm-advisor` published
-- **GitHub Release**: v0.4.2 published
-- **Dockerfile**: multi-stage build, node:22-alpine (181MB)
-- **MCP Marketplace**: 掲載済み (https://mcp-marketplace.io/server/io-github-daichi-kudo-llm-advisor)
-- **punkpeye/awesome-mcp-servers**: PR #2371 submitted (Data Science Tools section)
-- **mcp.so**: Issue #555 submitted
-- **mcpservers.org**: Web form submitted (free listing, category: development)
-- **MCPMarket**: Web form submitted
+### Listed (verified 2026-06-17 by audit)
+- **Official MCP Registry**: `io.github.Daichi-Kudo/llm-advisor` — **v0.4.3 active/latest** ✅
+- **Glama**: ✅ LISTED — https://glama.ai/mcp/servers/Daichi-Kudo/llm-advisor-mcp（3月は未掲載→現在ライブ）
+- **mcpservers.org**: ✅ LISTED — https://mcpservers.org/servers/daichi-kudo/llm-advisor-mcp
+- **PulseMCP**: ✅ LISTED — https://www.pulsemcp.com/servers/daichi-kudo-llm-advisor（Official Registry から自動連携）
+- **punkpeye/awesome-mcp-servers**: ✅ PR #2371 **MERGED 2026-03-23**（README の Data Science Tools に掲載）
+- **MCP Marketplace**: ✅ LISTED — https://mcp-marketplace.io/server/io-github-daichi-kudo-llm-advisor（表示は **v0.4.2**、1版遅れ・自動更新待ち）
+- **GitHub / npm / CI / Dockerfile**: 12 topics, bilingual README, Node 18/20/22 CI, multi-stage Dockerfile
 
-### Pending / Blocked
-> ⚠️ 以下は 2026-03-02 時点の状態。3.5ヶ月未確認 — 各掲載の現況は再チェックが必要。
-- **Glama**: 2/26 に Add Server フォームでサブミット済み → 4日経過、未掲載。frank@glama.ai にフォローアップメール送信済み (3/2)
-- **awesome-mcp-servers PR #2371**: Glama 掲載後に `[glama]` リンク追加が必要 → Glama 待ち
-- mcp.so Issue #555 → 処理待ち
-- mcpservers.org → メール承認待ち (daichi@cognisant.io)
-- MCPMarket → レビュー待ち
-- PulseMCP → Official Registry から週次自動連携で掲載予定
+### Outstanding
+- **mcp.so**: ⏳ PENDING — 投稿 issue `chatmcp/mcpso#555` が OPEN。Official Registry の下流なので自動取り込みの可能性、なければ issue を bump。優先度低。
+- **MCPMarket** (mcpmarket.com): ❓ UNKNOWN — 監査時に 429 でフェッチ不可。ブラウザでの手動確認が必要。
+- **Glama バッジ**: README に未追加（掲載はライブ済み）。任意の仕上げ。
 
 ### Promotional Content
 - `drafts/` に dev.to / Reddit / X ドラフト作成済み（未投稿）
 
 ## Next Steps
-1. ✅ v0.4.3 公開済み（npm + MCP Registry、2026-06-17）。git コミット / タグ `v0.4.3` は未実施
-2. ディレクトリ掲載の現況棚卸し（Glama / mcp.so / mcpservers.org / MCPMarket / awesome PR #2371）— 3.5ヶ月未確認
-3. dev.to / Reddit / X での露出拡大（`drafts/` に未投稿ドラフトあり）
-4. (任意) VLM の name-match 改善、メジャー依存更新（zod4 / TS6 / vitest4）
+1. ✅ v0.4.3 公開済み（npm + MCP Registry、2026-06-17）。コミット+タグ `v0.4.3` 済み
+2. ✅ 掲載棚卸し完了（6 LISTED / mcp.so のみ pending / MCPMarket 要手動確認）
+3. ✅ v0.4.4 公開済み（VLM照合の正確性fix + Glama badge + dev依存bump vitest4/@types/node25、監査 6→2）
+4. (任意) README に Glama バッジ追加、MCPMarket 手動確認、mcp.so #555 bump
+5. (任意) dev.to / Reddit / X 露出拡大（`drafts/` 未投稿）
+6. (保留) TS6（tsup DTS 破壊）・zod4（SDK 依存）のメジャー更新
 
 ## Technical Notes
 

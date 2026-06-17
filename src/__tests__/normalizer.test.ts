@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeKey, mergeBenchmarkData } from "../data/normalizer.js";
+import { normalizeKey, mergeBenchmarkData, buildKeyToId, findMatch } from "../data/normalizer.js";
 import type { UnifiedModel } from "../types.js";
 import type { SweBenchEntry } from "../data/fetchers/swe-bench.js";
 import type { ArenaEntry } from "../data/fetchers/arena.js";
@@ -158,5 +158,74 @@ describe("mergeBenchmarkData", () => {
 
     // Existing higher score (75.0) should be preserved
     expect(m.benchmarks.sweBenchVerified).toBe(75.0);
+  });
+
+  it("does not assign a VL/vision model's scores to a non-vision base model", () => {
+    const models = new Map<string, UnifiedModel>();
+    const dsChat = makeModel("deepseek/deepseek-chat", "DeepSeek Chat");
+    dsChat.capabilities.inputModalities = ["text"];
+    models.set("deepseek/deepseek-chat", dsChat);
+
+    const vlmScores = new Map<string, VlmEntry>();
+    vlmScores.set("deepseek-vl-7b", { name: "DeepSeek-VL-7B", mmmu: 41.5 });
+
+    mergeBenchmarkData(models, new Map(), new Map(), vlmScores);
+
+    // "deepseek-vl-7b" is a distinct vision model, not deepseek-chat
+    expect(dsChat.benchmarks.mmmu).toBeUndefined();
+  });
+});
+
+// ============================================================
+// findMatch — false-positive guards
+// ============================================================
+
+describe("findMatch", () => {
+  function model(id: string, name: string): UnifiedModel {
+    return {
+      id,
+      slug: id.replace(/\//g, "-").toLowerCase(),
+      name,
+      pricing: { input: 1, output: 1 },
+      benchmarks: {},
+      capabilities: {
+        contextLength: 128000,
+        inputModalities: ["text", "image"],
+        outputModalities: ["text"],
+        supportsTools: true,
+        supportsStreaming: true,
+        supportsReasoning: false,
+      },
+      metadata: { provider: "test", family: "test", isOpenSource: false },
+      percentiles: {},
+      lastUpdated: "2026-01-01T00:00:00.000Z",
+    };
+  }
+
+  const keyToId = buildKeyToId(
+    new Map<string, UnifiedModel>([
+      ["openai/gpt-chat-latest", model("openai/gpt-chat-latest", "GPT Chat Latest")],
+      ["openai/gpt-4o-2024-11-20", model("openai/gpt-4o-2024-11-20", "GPT-4o")],
+      ["deepseek/deepseek-chat", model("deepseek/deepseek-chat", "DeepSeek Chat")],
+      ["qwen/qwen2.5-vl-72b-instruct", model("qwen/qwen2.5-vl-72b-instruct", "Qwen2.5 VL 72B Instruct")],
+      ["google/gemini-2.5-pro", model("google/gemini-2.5-pro", "Gemini 2.5 Pro")],
+    ])
+  );
+
+  it("does not match open models that merely contain the 'gpt' stem", () => {
+    expect(findMatch("PandaGPT-13B", keyToId)).toBeNull();
+    expect(findMatch("ShareGPT4V-13B", keyToId)).toBeNull();
+    expect(findMatch("MiniGPT-4-v2", keyToId)).toBeNull();
+  });
+
+  it("does not match a VL/vision variant to a non-vision base model", () => {
+    expect(findMatch("DeepSeek-VL-7B", keyToId)).toBeNull();
+    expect(findMatch("DeepSeek-VL2", keyToId)).toBeNull();
+  });
+
+  it("still matches legitimate models (exact and substring)", () => {
+    expect(findMatch("GPT-4o (0513, detail-high)", keyToId)).toBe("openai/gpt-4o-2024-11-20");
+    expect(findMatch("Qwen2.5-VL-72B", keyToId)).toBe("qwen/qwen2.5-vl-72b-instruct");
+    expect(findMatch("Gemini-2.5-Pro", keyToId)).toBe("google/gemini-2.5-pro");
   });
 });

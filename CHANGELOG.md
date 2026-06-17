@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.4] - 2026-06-17
+
+### Fixed
+- **VLM benchmark matching mis-attributed scores to the wrong models.** Open research models carrying the "gpt" stem (`PandaGPT`, `ShareGPT4V`, `MiniGPT`) collapsed onto `openai/gpt-chat-latest`, and `DeepSeek-VL` / `Phi-4-MultiModal` matched their non-vision base models. Substring matching now requires both keys ≥6 chars, plus a vision-token guard so a VL/vision model can't match a non-vision base. `GPT-4o` now correctly attributes to `openai/gpt-4o-*`. All retained VLM matches are now correct (+4 tests, 55 total).
+
+### Added
+- Glama listing badge in both READMEs (server is live at glama.ai).
+
+### Changed
+- Dev tooling: vitest 3→4, @types/node 22→25, tsup floor →8.5.1 (npm audit high advisories 6→2; the remaining 2 are dev-only esbuild advisories not reachable in this project). TypeScript stays on 5 (6 breaks tsup's `.d.ts` generation); zod stays on 3 (the MCP SDK requires zod 3).
+
 ## [0.4.3] - 2026-06-17
 
 ### Fixed
