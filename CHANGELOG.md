@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.5] - 2026-06-17
+
+### Changed
+- Documentation / metadata only (no code change): aligned README badges and model count with reality (TypeScript 5.9, OpenRouter 300+), and `package.json` `author` now links to https://cognisant.io. Republished so npm and the MCP Registry reflect the updated metadata.
+
 ## [0.4.4] - 2026-06-17
 
 ### Fixed

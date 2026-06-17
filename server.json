@@ -6,12 +6,12 @@
     "url": "https://github.com/Daichi-Kudo/llm-advisor-mcp",
     "source": "github"
   },
-  "version": "0.4.4",
+  "version": "0.4.5",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "llm-advisor-mcp",
-      "version": "0.4.4",
+      "version": "0.4.5",
       "transport": {
         "type": "stdio"
       },

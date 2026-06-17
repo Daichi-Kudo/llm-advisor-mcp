@@ -4,9 +4,9 @@
 
 ## Current Version
 
-**v0.4.4** (published to npm + MCP Registry on 2026-06-17)
+**v0.4.5** (published to npm + MCP Registry on 2026-06-17)
 
-> v0.4.3: fixed dead VLM data source (see Data Source Health). v0.4.4: fixed VLM match mis-attribution + Glama badge + dev-dep bumps.
+> v0.4.3: fixed dead VLM data source (see Data Source Health). v0.4.4: fixed VLM match mis-attribution + Glama badge + dev-dep bumps. v0.4.5: README/metadata accuracy + cognisant.io author link.
 > Traction: ~237 downloads/last-30d, ~68/last-7d, slowly rising (as of 2026-06-17).
 
 ## What This Is
