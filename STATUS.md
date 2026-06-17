@@ -1,10 +1,13 @@
 # STATUS — llm-advisor-mcp
 
-> Last updated: 2026-02-25
+> Last updated: 2026-06-17
 
 ## Current Version
 
-**v0.4.2** (npm published, MCP Registry published)
+**v0.4.3** (published to npm + MCP Registry on 2026-06-17)
+
+> v0.4.3 fixes a dead VLM data source (see Data Source Health).
+> Traction: ~237 downloads/last-30d, ~68/last-7d, slowly rising (as of 2026-06-17).
 
 ## What This Is
 
@@ -18,18 +21,19 @@ MCP server that gives AI assistants real-time LLM/VLM knowledge — pricing, ben
 - In-memory TTL cache (1h pricing, 6h benchmarks)
 - Cross-source model name normalization + percentile ranking
 
-## Completed (v0.1–v0.4)
+## Data Source Health (verified 2026-06-17 via `npm run smoke`)
 
-| Version | Highlights |
-|---------|------------|
-| v0.1 | `get_model_info` + `list_top_models` via OpenRouter |
-| v0.2 | `compare_models` + `recommend_model` + SWE-bench + Arena Elo |
-| v0.3 | VLM benchmarks + Aider Polyglot + percentile ranks + 43 tests |
-| v0.3.1 | Bug fix: OpenRouter meta-models (negative pricing), fuzzy match precision |
-| v0.3.2 | (skipped — published as v0.3.1) |
-| v0.4.0 | Release date display, `min_release_date` filter, freshness scoring (+3/+1) + 51 tests |
-| v0.4.1 | npm metadata optimization (description, keywords 18個, homepage/repo/bugs) |
-| v0.4.2 | Official MCP Registry 登録 (`io.github.Daichi-Kudo/llm-advisor`), mcpName field 追加 |
+| Source | Status | Coverage |
+|--------|--------|----------|
+| OpenRouter | ✅ live | 307 models |
+| LM Arena (arena.ai RSC scrape) | ✅ primary path healthy | 147 w/ Elo |
+| SWE-bench | ✅ live | 40 |
+| Aider Polyglot | ✅ live | 27 |
+| OpenCompass VLM | ✅ **fixed in v0.4.3** | 12 w/ MMMU |
+
+- VLM source was **dead ~2026-04-16 → 2026-06-17**: `opencompass.openxlab.space` TLS cert expired, fetch threw, vision scores silently degraded to empty (graceful `.catch(() => new Map())`). Switched to `cdn.opencompass.org.cn` (byte-identical data, valid cert).
+- VLM upstream data is frozen at 2025-09-17 (OpenCompass-side, both hosts identical). Only ~12 OpenRouter models name-match the VLM table — low match rate is pre-existing (normalizer), a candidate for future improvement, not a regression.
+- `npm run smoke` added to surface silent source death immediately (exits non-zero if any source returns 0 rows).
 
 ## Discoverability / Distribution
 
@@ -38,42 +42,34 @@ MCP server that gives AI assistants real-time LLM/VLM knowledge — pricing, ben
 - **npm**: 18 keywords, optimized description, homepage/repository/bugs fields
 - **GitHub Actions CI**: Node 18/20/22 matrix, passing
 - **Official MCP Registry**: `io.github.Daichi-Kudo/llm-advisor` published
+- **GitHub Release**: v0.4.2 published
+- **Dockerfile**: multi-stage build, node:22-alpine (181MB)
+- **MCP Marketplace**: 掲載済み (https://mcp-marketplace.io/server/io-github-daichi-kudo-llm-advisor)
 - **punkpeye/awesome-mcp-servers**: PR #2371 submitted (Data Science Tools section)
 - **mcp.so**: Issue #555 submitted
 - **mcpservers.org**: Web form submitted (free listing, category: development)
 - **MCPMarket**: Web form submitted
 
-### Pending Approval
-- punkpeye/awesome-mcp-servers PR #2371 → メンテナーレビュー待ち
+### Pending / Blocked
+> ⚠️ 以下は 2026-03-02 時点の状態。3.5ヶ月未確認 — 各掲載の現況は再チェックが必要。
+- **Glama**: 2/26 に Add Server フォームでサブミット済み → 4日経過、未掲載。frank@glama.ai にフォローアップメール送信済み (3/2)
+- **awesome-mcp-servers PR #2371**: Glama 掲載後に `[glama]` リンク追加が必要 → Glama 待ち
 - mcp.so Issue #555 → 処理待ち
 - mcpservers.org → メール承認待ち (daichi@cognisant.io)
 - MCPMarket → レビュー待ち
 - PulseMCP → Official Registry から週次自動連携で掲載予定
 
-### Promotional Content (drafts/ ディレクトリ、未投稿)
-- `drafts/devto-article.md` — dev.to 記事ドラフト (EN, ~1,100 words)
-- `drafts/reddit-post.md` — Reddit 投稿ドラフト (r/ClaudeAI + r/LocalLLaMA)
-- `drafts/x-thread.md` — X/Twitter スレッドドラフト (7ツイート版 + 5ツイート版)
+### Promotional Content
+- `drafts/` に dev.to / Reddit / X ドラフト作成済み（未投稿）
 
-## Planned (v1.0)
-
-- Community contributions workflow
-- GitHub Actions による週次静的データスナップショット
-- dev.to / Reddit / X での露出拡大（ドラフト作成済み）
-
-## Key Accounts / Credentials
-
-- **npm**: `llm-advisor-mcp` (Cognisant LLC)
-- **GitHub**: `Daichi-Kudo/llm-advisor-mcp`
-- **MCP Registry**: `io.github.Daichi-Kudo/llm-advisor` (GitHub auth via mcp-publisher)
-- **mcpservers.org contact**: daichi@cognisant.io
+## Next Steps
+1. ✅ v0.4.3 公開済み（npm + MCP Registry、2026-06-17）。git コミット / タグ `v0.4.3` は未実施
+2. ディレクトリ掲載の現況棚卸し（Glama / mcp.so / mcpservers.org / MCPMarket / awesome PR #2371）— 3.5ヶ月未確認
+3. dev.to / Reddit / X での露出拡大（`drafts/` に未投稿ドラフトあり）
+4. (任意) VLM の name-match 改善、メジャー依存更新（zod4 / TS6 / vitest4）
 
 ## Technical Notes
 
-- MCP SDK v1.12.0+ uses **newline-delimited JSON** (not LSP Content-Length headers) for stdio
-- OpenRouter meta-models (`openrouter/*`) have negative pricing → filtered in `openrouter.ts`
-- Fuzzy model matching: exact → provider-stripped exact → shortest-ID-first contains
-- `metadata.releaseDate` from OpenRouter `created` field — 100% coverage
-- MCP Registry naming: **case-sensitive** (`io.github.Daichi-Kudo/*` not `io.github.daichi-kudo/*`)
-- MCP Registry description: **100 chars max**
-- `mcp-publisher.exe` は .gitignore 済み、必要時は GitHub releases から再取得
+- MCP Registry: **case-sensitive** naming (`io.github.Daichi-Kudo/*`), description **100 chars max**
+- OpenRouter meta-models (`openrouter/*`) → negative pricing → filtered
+- Fuzzy match: exact → provider-stripped → shortest-ID-first contains

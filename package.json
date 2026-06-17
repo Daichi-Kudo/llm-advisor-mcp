@@ -1,11 +1,11 @@
 {
   "name": "llm-advisor-mcp",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "mcpName": "io.github.Daichi-Kudo/llm-advisor",
   "description": "MCP server for LLM/VLM model selection — compare 336+ models with real-time benchmarks, pricing, and personalized recommendations. No API key required.",
   "type": "module",
   "bin": {
-    "llm-advisor-mcp": "./dist/index.js"
+    "llm-advisor-mcp": "dist/index.js"
   },
   "files": [
     "dist"
@@ -15,6 +15,7 @@
     "dev": "tsx src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest watch",
+    "smoke": "tsx scripts/smoke.ts",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

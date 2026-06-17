@@ -1,6 +1,9 @@
 import type { InMemoryCache } from "../cache.js";
 
-const API_URL = "https://opencompass.openxlab.space/assets/OpenVLM.json";
+// Was opencompass.openxlab.space, whose TLS cert expired 2026-04-16 (Node rejects
+// it, silently zeroing out all VLM scores). cdn.opencompass.org.cn serves the
+// byte-identical OpenVLM.json with a valid cert.
+const API_URL = "https://cdn.opencompass.org.cn/assets/OpenVLM.json";
 const CACHE_KEY = "vlm:opencompass";
 const TTL = 6 * 60 * 60 * 1000; // 6 hours
 

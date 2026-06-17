@@ -2,11 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.3] - 2026-06-17
+
+### Fixed
+- **VLM benchmarks silently dropped to empty since ~2026-04-16.** The OpenCompass data host (`opencompass.openxlab.space`) let its TLS certificate expire (notAfter 2026-04-16), so the fetch threw and — because benchmark enrichment degrades gracefully — all vision scores (MMMU, MMBench, OCRBench, AI2D, MathVista) silently vanished from `get_model_info`, `list_top_models`, `compare_models`, and `recommend_model`. Switched the source to `cdn.opencompass.org.cn/assets/OpenVLM.json` (byte-identical data, valid cert).
+
+### Added
+- `npm run smoke` — live smoke test that hits all 5 data sources and exits non-zero if any returns zero rows, so a silently-dead source surfaces immediately.
+
+### Changed
+- Bumped `@modelcontextprotocol/sdk` 1.27 → 1.29 and dev tooling (tsx, vitest) within existing semver ranges. No API changes; 51 tests still green.
+
+### Known limitations
+- OpenCompass's upstream VLM data is itself frozen at 2025-09-17, so vision scores reflect models available up to that date.
+
 ## [0.4.2] - 2026-02-25
 
 ### Added
 - Registered to Official MCP Registry (`io.github.Daichi-Kudo/llm-advisor`)
 - `mcpName` field in package.json for registry namespace
+- Dockerfile for containerized deployment (multi-stage build, node:22-alpine)
+- GitHub Release v0.4.2
 
 ## [0.4.1] - 2026-02-25
 
