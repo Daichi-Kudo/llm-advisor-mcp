@@ -142,8 +142,6 @@ export type ModelCategory =
   | "context-window"
   | "reasoning";
 
-export type ApiExampleFormat = "openai_sdk" | "curl" | "python_requests";
-
 // ============================================================
 // Cache types
 // ============================================================
@@ -154,15 +152,4 @@ export interface CacheEntry<T> {
   ttl: number;
   source: string;
   etag?: string;
-}
-
-// ============================================================
-// Scoring types
-// ============================================================
-
-export interface ScoringWeights {
-  benchmarkWeight: number;
-  priceWeight: number;
-  speedWeight: number;
-  primaryBenchmarks: (keyof BenchmarkScores)[];
 }

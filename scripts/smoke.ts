@@ -34,7 +34,7 @@ console.table(coverage);
 const topVision = registry
   .getTopModels("vision", 5)
   .map((m) => ({ id: m.id, mmmu: m.benchmarks.mmmu ?? null }));
-console.log("top vision (by MMMU):");
+console.log("top vision (by composite score):");
 console.table(topVision);
 
 // Fail loudly if any source contributed zero rows — that means it's broken.

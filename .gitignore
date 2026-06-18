@@ -4,5 +4,7 @@ dist/
 .env
 mcp-publisher.exe
 mcp-publisher.tar.gz
+*.tgz
 drafts/
 .mcpregistry_*
+.serena/

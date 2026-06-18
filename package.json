@@ -16,6 +16,8 @@
     "test": "vitest run",
     "test:watch": "vitest watch",
     "smoke": "tsx scripts/smoke.ts",
+    "smoke:mcp": "tsx scripts/mcp-smoke.ts",
+    "smoke:package": "tsx scripts/package-smoke.ts",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -55,7 +57,7 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {

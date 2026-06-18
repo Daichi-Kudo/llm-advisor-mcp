@@ -3,16 +3,31 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ModelRegistry } from "../data/registry.js";
 import type { UnifiedModel, UseCase } from "../types.js";
 import { fmtPrice, fmtContext, fmtScore, fmtElo, freshnessFooter } from "./formatters.js";
+import {
+  getBlendedTokenPrice,
+  getCompositeBenchmarkScore,
+  getOverallBenchmarkScore,
+} from "../data/percentiles.js";
+import { MCP_REGISTRY_NAME, SERVER_VERSION } from "../metadata.js";
 
 export function registerRecommendTool(
   server: McpServer,
   registry: ModelRegistry
 ): void {
-  server.tool(
+  server.registerTool(
     "recommend_model",
-    "Get personalized model recommendations based on use case, budget, and requirements. " +
-      "Returns top 3 picks with reasoning (~350 tokens).",
     {
+      title: "Recommend model",
+      description:
+        `Get personalized model recommendations based on use case, budget, and requirements (llm-advisor ${SERVER_VERSION}, MCP registry ${MCP_REGISTRY_NAME}). ` +
+        "Returns top 3 picks with reasoning (~350 tokens).",
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+      inputSchema: {
       use_case: z
         .enum(["coding", "math", "general", "vision", "creative", "reasoning", "cost-effective"])
         .describe("Primary use case"),
@@ -44,6 +59,7 @@ export function registerRecommendTool(
         .string()
         .optional()
         .describe("Minimum release date (YYYY-MM-DD). Excludes older models"),
+    },
     },
     async ({
       use_case,
@@ -102,7 +118,7 @@ export function registerRecommendTool(
       // Score and rank
       const scored = candidates
         .map((m) => ({ model: m, score: computeScore(m, use_case as UseCase) }))
-        .sort((a, b) => b.score - a.score)
+        .sort((a, b) => b.score - a.score || a.model.id.localeCompare(b.model.id))
         .slice(0, 3);
 
       const fetchedAt = registry.getCacheFreshnessMs();
@@ -126,7 +142,7 @@ function computeScore(model: UnifiedModel, useCase: UseCase): number {
 
   // Price component (inversely proportional — cheaper is better)
   // Normalize: $0 = 100 points, $30/1M = 0 points
-  const blended = model.pricing.input * 0.6 + model.pricing.output * 0.4;
+  const blended = getBlendedTokenPrice(model);
   const priceScore = Math.max(0, 100 - (blended / 30) * 100);
   score += priceScore * weights.price;
 
@@ -181,25 +197,22 @@ function getWeights(useCase: UseCase): Weights {
 function getBenchmarkScore(model: UnifiedModel, useCase: UseCase): number {
   switch (useCase) {
     case "coding":
-      return model.benchmarks.sweBenchVerified ?? model.benchmarks.aiderPolyglot ?? (model.benchmarks.arenaElo ? normalizeElo(model.benchmarks.arenaElo) : 0);
+      return getCompositeBenchmarkScore(model, "coding") ?? 0;
     case "math":
+      return getCompositeBenchmarkScore(model, "math") ?? 0;
     case "reasoning":
-      return model.benchmarks.gpqaDiamond ?? model.benchmarks.math500 ?? (model.benchmarks.arenaElo ? normalizeElo(model.benchmarks.arenaElo) : 0);
+      return getCompositeBenchmarkScore(model, "reasoning") ?? 0;
     case "vision":
-      return model.benchmarks.mmmu ?? 0;
+      return getCompositeBenchmarkScore(model, "vision") ?? 0;
     case "general":
+      return getCompositeBenchmarkScore(model, "general") ?? 0;
     case "creative":
-      return model.benchmarks.arenaElo ? normalizeElo(model.benchmarks.arenaElo) : (model.benchmarks.mmluPro ?? 0);
+      return getCompositeBenchmarkScore(model, "creative") ?? 0;
     case "cost-effective":
-      return model.benchmarks.arenaElo ? normalizeElo(model.benchmarks.arenaElo) : 0;
+      return getOverallBenchmarkScore(model) ?? 0;
     default:
-      return model.benchmarks.arenaElo ? normalizeElo(model.benchmarks.arenaElo) : 0;
+      return getCompositeBenchmarkScore(model, "general") ?? 0;
   }
-}
-
-/** Normalize Arena Elo (900-1500) to a 0-100 scale */
-function normalizeElo(elo: number): number {
-  return Math.max(0, Math.min(100, ((elo - 900) / 600) * 100));
 }
 
 function formatRecommendations(
@@ -231,19 +244,19 @@ function formatRecommendations(
 
     // Key benchmarks for this use case
     const benchParts: string[] = [];
-    if (model.benchmarks.sweBenchVerified) {
+    if (model.benchmarks.sweBenchVerified !== undefined) {
       benchParts.push(`SWE-bench: ${fmtScore(model.benchmarks.sweBenchVerified)}`);
     }
-    if (model.benchmarks.aiderPolyglot) {
+    if (model.benchmarks.aiderPolyglot !== undefined) {
       benchParts.push(`Aider: ${fmtScore(model.benchmarks.aiderPolyglot)}`);
     }
-    if (model.benchmarks.arenaElo) {
+    if (model.benchmarks.arenaElo !== undefined) {
       benchParts.push(`Arena: ${fmtElo(model.benchmarks.arenaElo)}`);
     }
-    if (model.benchmarks.gpqaDiamond) {
+    if (model.benchmarks.gpqaDiamond !== undefined) {
       benchParts.push(`GPQA: ${fmtScore(model.benchmarks.gpqaDiamond)}`);
     }
-    if (model.benchmarks.mmmu) {
+    if (model.benchmarks.mmmu !== undefined) {
       benchParts.push(`MMMU: ${fmtScore(model.benchmarks.mmmu)}`);
     }
     if (benchParts.length > 0) {

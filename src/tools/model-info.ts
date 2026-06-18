@@ -3,16 +3,26 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ModelRegistry } from "../data/registry.js";
 import { formatModelDetail } from "./formatters.js";
 import { getApiExample } from "../data/static/api-examples.js";
+import { MCP_REGISTRY_NAME, SERVER_VERSION } from "../metadata.js";
 
 export function registerModelInfoTool(
   server: McpServer,
   registry: ModelRegistry
 ): void {
-  server.tool(
+  server.registerTool(
     "get_model_info",
-    "Get detailed information about a specific LLM/VLM model: pricing, benchmarks, capabilities, " +
-      "and ready-to-use API code example. Returns structured Markdown (~300 tokens).",
     {
+      title: "Get model info",
+      description:
+        `Get detailed information about a specific LLM/VLM model from llm-advisor ${SERVER_VERSION} (MCP registry ${MCP_REGISTRY_NAME}): pricing, benchmarks, capabilities, ` +
+        "and ready-to-use API code example. Returns structured Markdown (~300 tokens).",
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+      inputSchema: {
       model: z
         .string()
         .describe(
@@ -26,6 +36,7 @@ export function registerModelInfoTool(
         .enum(["openai_sdk", "curl", "python_requests"])
         .optional()
         .describe("API example format (default: openai_sdk)"),
+    },
     },
     async ({ model, include_api_example, api_format }) => {
       await registry.ensureLoaded();

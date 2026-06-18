@@ -3,17 +3,32 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ModelRegistry } from "../data/registry.js";
 import type { UnifiedModel, ModelCategory } from "../types.js";
 import { formatTopList, fmtScore, fmtElo, fmtContext, fmtPrice } from "./formatters.js";
+import { MCP_REGISTRY_NAME, SERVER_VERSION } from "../metadata.js";
+import {
+  getBlendedTokenPrice,
+  getCompositeBenchmarkScore,
+  getCostEfficiencyScore,
+} from "../data/percentiles.js";
 
 export function registerListTopTool(
   server: McpServer,
   registry: ModelRegistry
 ): void {
-  server.tool(
+  server.registerTool(
     "list_top_models",
-    "List top-ranked LLM/VLM models for a category. " +
-      "Categories: coding, math, vision, general, cost-effective, open-source, speed, context-window, reasoning. " +
-      "Returns a compact Markdown table (~250 tokens).",
     {
+      title: "List top models",
+      description:
+        `List top-ranked LLM/VLM models for a category (llm-advisor ${SERVER_VERSION}, MCP registry ${MCP_REGISTRY_NAME}). ` +
+        "Categories: coding, math, vision, general, cost-effective, open-source, speed, context-window, reasoning. " +
+        "Returns a compact Markdown table (~250 tokens).",
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+      inputSchema: {
       category: z
         .enum([
           "coding",
@@ -42,25 +57,15 @@ export function registerListTopTool(
         .optional()
         .describe("Minimum release date (YYYY-MM-DD). Excludes older models"),
     },
+    },
     async ({ category, limit, min_context, min_release_date }) => {
       await registry.ensureLoaded();
 
       const effectiveLimit = limit ?? 10;
-      let models = registry.getTopModels(category as ModelCategory, effectiveLimit + 10); // fetch extra for filtering
-
-      if (min_context) {
-        models = models.filter(
-          (m) => m.capabilities.contextLength >= min_context
-        );
-      }
-
-      if (min_release_date) {
-        models = models.filter(
-          (m) => m.metadata.releaseDate !== undefined && m.metadata.releaseDate >= min_release_date
-        );
-      }
-
-      models = models.slice(0, effectiveLimit);
+      const models = registry.getTopModels(category as ModelCategory, effectiveLimit, {
+        minContext: min_context,
+        minReleaseDate: min_release_date,
+      });
 
       if (models.length === 0) {
         return {
@@ -96,45 +101,57 @@ function getKeyScoreExtractor(
   switch (category) {
     case "coding":
       return (m) =>
-        m.benchmarks.sweBenchVerified
-          ? `SWE ${fmtScore(m.benchmarks.sweBenchVerified)}`
-          : m.benchmarks.arenaElo
-            ? `Elo ${fmtElo(m.benchmarks.arenaElo)}`
-            : "n/a";
+        fmtCompositeWithParts(getCompositeBenchmarkScore(m, "coding"), [
+          ["SWE", fmtScore(m.benchmarks.sweBenchVerified)],
+          ["Aider", fmtScore(m.benchmarks.aiderPolyglot)],
+          ["Elo", fmtElo(m.benchmarks.arenaElo)],
+        ]);
 
     case "math":
       return (m) =>
-        m.benchmarks.math500
-          ? `MATH ${fmtScore(m.benchmarks.math500)}`
-          : m.benchmarks.gpqaDiamond
-            ? `GPQA ${fmtScore(m.benchmarks.gpqaDiamond)}`
-            : "n/a";
+        fmtCompositeWithParts(getCompositeBenchmarkScore(m, "math"), [
+          ["MATH", fmtScore(m.benchmarks.math500)],
+          ["GPQA", fmtScore(m.benchmarks.gpqaDiamond)],
+          ["AIME", fmtScore(m.benchmarks.aime2024)],
+        ]);
 
     case "vision":
       return (m) =>
-        m.benchmarks.mmmu
-          ? `MMMU ${fmtScore(m.benchmarks.mmmu)}`
-          : "vision";
+        fmtCompositeWithParts(getCompositeBenchmarkScore(m, "vision"), [
+          ["MMMU", fmtScore(m.benchmarks.mmmu)],
+          ["MMB", fmtScore(m.benchmarks.mmBench)],
+          ["OCR", fmtScore(m.benchmarks.ocrBench)],
+        ]);
 
     case "general":
       return (m) =>
-        m.benchmarks.arenaElo
-          ? `Elo ${fmtElo(m.benchmarks.arenaElo)}`
-          : m.benchmarks.mmluPro
-            ? `MMLU ${fmtScore(m.benchmarks.mmluPro)}`
-            : "n/a";
+        fmtCompositeWithParts(getCompositeBenchmarkScore(m, "general"), [
+          ["Elo", fmtElo(m.benchmarks.arenaElo)],
+          ["MMLU", fmtScore(m.benchmarks.mmluPro)],
+          ["GPQA", fmtScore(m.benchmarks.gpqaDiamond)],
+        ]);
 
     case "cost-effective":
       return (m) => {
-        const blended = m.pricing.input * 0.75 + m.pricing.output * 0.25;
-        return `${fmtPrice(blended)}/1M`;
+        const blended = getBlendedTokenPrice(m);
+        const score = getCostEfficiencyScore(m);
+        return score !== undefined
+          ? `${score.toFixed(1)} perf/$ (${fmtPrice(blended)}/1M)`
+          : `${fmtPrice(blended)}/1M`;
       };
 
     case "open-source":
       return (m) =>
-        m.benchmarks.arenaElo
-          ? `Elo ${fmtElo(m.benchmarks.arenaElo)}`
-          : "OSS";
+        fmtCompositeWithParts(
+          getCompositeBenchmarkScore(m, "general") ??
+            getCompositeBenchmarkScore(m, "coding") ??
+            getCompositeBenchmarkScore(m, "vision"),
+          [
+            ["Elo", fmtElo(m.benchmarks.arenaElo)],
+            ["SWE", fmtScore(m.benchmarks.sweBenchVerified)],
+            ["MMMU", fmtScore(m.benchmarks.mmmu)],
+          ]
+        );
 
     case "speed":
       return (m) => `${fmtPrice(m.pricing.output)}/1M out`;
@@ -144,11 +161,27 @@ function getKeyScoreExtractor(
 
     case "reasoning":
       return (m) =>
-        m.benchmarks.gpqaDiamond
-          ? `GPQA ${fmtScore(m.benchmarks.gpqaDiamond)}`
-          : "reasoning";
+        fmtCompositeWithParts(getCompositeBenchmarkScore(m, "reasoning"), [
+          ["GPQA", fmtScore(m.benchmarks.gpqaDiamond)],
+          ["MATH", fmtScore(m.benchmarks.math500)],
+          ["AIME", fmtScore(m.benchmarks.aime2024)],
+        ]);
 
     default:
       return () => "n/a";
   }
+}
+
+function fmtCompositeWithParts(
+  score: number | undefined,
+  parts: [label: string, value: string][]
+): string {
+  if (score === undefined) return "n/a";
+
+  const availableParts = parts
+    .filter(([, value]) => value !== "n/a")
+    .map(([label, value]) => `${label} ${value}`);
+
+  const suffix = availableParts.length > 0 ? ` (${availableParts.join(", ")})` : "";
+  return `Composite ${fmtScore(score)}${suffix}`;
 }

@@ -1,6 +1,6 @@
 # STATUS — llm-advisor-mcp
 
-> Last updated: 2026-06-17
+> Last updated: 2026-06-19
 
 ## Current Version
 
@@ -12,11 +12,14 @@ MCP server giving AI assistants real-time LLM/VLM knowledge — pricing, benchma
 
 ## Architecture
 
-- TypeScript + ESM, `tsup` build, `vitest` (55 tests)
+- TypeScript + ESM, `tsup` build, `vitest` (66 tests)
 - 4 tools: `get_model_info`, `list_top_models`, `compare_models`, `recommend_model`
 - 5 fetchers: OpenRouter, SWE-bench, LM Arena, OpenCompass VLM, Aider Polyglot
-- In-memory TTL cache (1h pricing, 6h benchmarks); cross-source name normalization + percentile ranks
+- In-memory TTL cache (1h pricing, 6h benchmarks); cross-source name normalization + composite benchmark scoring + percentile ranks
+- Tool registration uses MCP `registerTool` with read-only/idempotent annotations and versioned metadata from `src/metadata.ts`
 - `npm run smoke` — live health check of all 5 sources (exits non-zero if any returns 0 rows)
+- `npm run smoke:mcp` — stdio MCP smoke test for server metadata, tool discovery, annotations, and optional live call
+- `npm run smoke:package` — pack/install smoke test for the published binary layout
 
 ## Data Sources (all 5 live, verified 2026-06-17)
 

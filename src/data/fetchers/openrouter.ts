@@ -112,18 +112,35 @@ const OPEN_SOURCE_PROVIDERS = new Set([
   "mistralai",
   "qwen",
   "deepseek",
-  "google",  // gemma
-  "microsoft",  // phi
+  "microsoft", // phi
   "nvidia",
   "zhipuai",
+  "01-ai",
+  "allenai",
+  "cognitivecomputations",
+  "databricks",
+  "inception",
+  "internlm",
+  "nousresearch",
+  "perplexity",
+  "snowflake",
+  "teknium",
+  "tngtech",
+  "x-ai", // Grok 1 only; proprietary Grok variants are excluded by explicit patterns below.
 ]);
 
 const OPEN_SOURCE_PATTERNS = [
   /llama/i, /mistral/i, /mixtral/i, /qwen/i, /deepseek/i,
-  /gemma/i, /phi-/i, /yi-/i, /command-r/i, /glm/i,
+  /gemma/i, /phi-/i, /yi-/i, /command-r/i, /glm/i, /grok-1/i,
 ];
 
-function isOpenSource(modelId: string): boolean {
+const PROPRIETARY_PATTERNS = [
+  /gemini/i,
+  /grok-(?!1(?:\b|-))/i,
+];
+
+export function isOpenSource(modelId: string): boolean {
+  if (PROPRIETARY_PATTERNS.some((p) => p.test(modelId))) return false;
   const [provider] = modelId.split("/");
   if (OPEN_SOURCE_PROVIDERS.has(provider)) return true;
   return OPEN_SOURCE_PATTERNS.some((p) => p.test(modelId));

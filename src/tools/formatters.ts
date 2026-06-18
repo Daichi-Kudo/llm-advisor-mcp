@@ -15,7 +15,8 @@ export function buildMarkdownTable(
 
   let table = [headerLine, separatorLine, ...dataLines].join("\n");
   if (truncated) {
-    table += `\n| ... | +${rows.length - maxRows} more ||`;
+    const note = [`+${rows.length - maxRows} more`, ...headers.slice(1).map(() => "")];
+    table += `\n| ${note.join(" | ")} |`;
   }
   return table;
 }
@@ -30,8 +31,11 @@ export function fmtPrice(price: number | undefined): string {
 
 /** Format large context lengths: 128000 → "128K", 1000000 → "1M" */
 export function fmtContext(tokens: number | undefined): string {
-  if (!tokens) return "n/a";
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(tokens % 1_000_000 === 0 ? 0 : 1)}M`;
+  if (tokens === undefined || tokens === null) return "n/a";
+  if (tokens >= 1_000_000) {
+    if (tokens % 1_000_000 === 0) return `${tokens / 1_000_000}M`;
+    return `${Math.floor(tokens / 100_000) / 10}M`;
+  }
   if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}K`;
   return String(tokens);
 }
@@ -93,7 +97,7 @@ export function formatModelDetail(model: UnifiedModel, fetchedAt?: number): stri
     lines.push(`| Reasoning | ${fmtPrice(model.pricing.reasoning)} /1M tok |`);
   }
   lines.push(`| Context | ${fmtContext(model.capabilities.contextLength)} |`);
-  if (model.capabilities.maxOutputTokens) {
+  if (model.capabilities.maxOutputTokens !== undefined) {
     lines.push(`| Max Output | ${fmtContext(model.capabilities.maxOutputTokens)} |`);
   }
 

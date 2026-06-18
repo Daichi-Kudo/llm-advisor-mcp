@@ -1,4 +1,4 @@
-import type { UnifiedModel, ModelCategory, BenchmarkScores } from "../types.js";
+import type { UnifiedModel, ModelCategory } from "../types.js";
 import { InMemoryCache } from "./cache.js";
 import { fetchOpenRouterModels } from "./fetchers/openrouter.js";
 import { fetchSweBenchScores } from "./fetchers/swe-bench.js";
@@ -6,7 +6,18 @@ import { fetchArenaScores } from "./fetchers/arena.js";
 import { fetchVlmScores } from "./fetchers/vlm-leaderboard.js";
 import { fetchAiderScores } from "./fetchers/aider.js";
 import { mergeBenchmarkData } from "./normalizer.js";
-import { computePercentiles } from "./percentiles.js";
+import {
+  computePercentiles,
+  getBlendedTokenPrice,
+  getCompositeBenchmarkScore,
+  getCostEfficiencyScore,
+  getOverallBenchmarkScore,
+} from "./percentiles.js";
+
+export interface TopModelFilters {
+  minContext?: number;
+  minReleaseDate?: string;
+}
 
 export class ModelRegistry {
   private models = new Map<string, UnifiedModel>();
@@ -109,57 +120,60 @@ export class ModelRegistry {
   }
 
   /** Get top models for a category, sorted by the relevant metric */
-  getTopModels(category: ModelCategory, limit = 10): UnifiedModel[] {
-    const allModels = this.getAllModels();
+  getTopModels(category: ModelCategory, limit = 10, filters: TopModelFilters = {}): UnifiedModel[] {
+    const allModels = this.getAllModels().filter((m) => modelMatchesFilters(m, filters));
 
     switch (category) {
       case "coding":
-        return sortByBenchmark(allModels, "sweBenchVerified", "arenaElo").slice(0, limit);
+        return sortByComposite(allModels, (m) => getCompositeBenchmarkScore(m, "coding")).slice(0, limit);
 
       case "math":
-        return sortByBenchmark(allModels, "math500", "gpqaDiamond").slice(0, limit);
+        return sortByComposite(allModels, (m) => getCompositeBenchmarkScore(m, "math")).slice(0, limit);
 
       case "vision":
-        return allModels
-          .filter((m) => m.capabilities.inputModalities.includes("image"))
-          .sort((a, b) => (b.benchmarks.mmmu ?? 0) - (a.benchmarks.mmmu ?? 0) || comparePricePerformance(a, b))
-          .slice(0, limit);
+        return sortByComposite(
+          allModels.filter((m) => m.capabilities.inputModalities.includes("image")),
+          (m) => getCompositeBenchmarkScore(m, "vision")
+        ).slice(0, limit);
 
       case "general":
-        return sortByBenchmark(allModels, "arenaElo", "mmluPro").slice(0, limit);
+        return sortByComposite(allModels, (m) => getCompositeBenchmarkScore(m, "general")).slice(0, limit);
 
       case "cost-effective":
-        return allModels
-          .filter((m) => m.pricing.input > 0)
-          .sort(comparePricePerformance)
-          .slice(0, limit);
+        return sortByComposite(
+          allModels.filter((m) => m.pricing.input > 0),
+          getCostEfficiencyScore
+        ).slice(0, limit);
 
       case "open-source":
-        return allModels
-          .filter((m) => m.metadata.isOpenSource)
-          .sort((a, b) => (b.benchmarks.arenaElo ?? 0) - (a.benchmarks.arenaElo ?? 0) || comparePricePerformance(a, b))
-          .slice(0, limit);
+        return sortByComposite(
+          allModels.filter((m) => m.metadata.isOpenSource),
+          (m) =>
+            getCompositeBenchmarkScore(m, "general") ??
+            getCompositeBenchmarkScore(m, "coding") ??
+            getCompositeBenchmarkScore(m, "vision")
+        ).slice(0, limit);
 
       case "speed":
         // Sort by price (proxy for speed — lower price models tend to be faster inference)
         // Real speed data would come from a future data source
         return allModels
-          .sort((a, b) => a.pricing.output - b.pricing.output)
+          .sort((a, b) => a.pricing.output - b.pricing.output || a.id.localeCompare(b.id))
           .slice(0, limit);
 
       case "context-window":
         return allModels
-          .sort((a, b) => b.capabilities.contextLength - a.capabilities.contextLength)
+          .sort((a, b) => b.capabilities.contextLength - a.capabilities.contextLength || a.id.localeCompare(b.id))
           .slice(0, limit);
 
       case "reasoning":
-        return allModels
-          .filter((m) => m.capabilities.supportsReasoning)
-          .sort((a, b) => (b.benchmarks.gpqaDiamond ?? 0) - (a.benchmarks.gpqaDiamond ?? 0) || (b.benchmarks.arenaElo ?? 0) - (a.benchmarks.arenaElo ?? 0))
-          .slice(0, limit);
+        return sortByComposite(
+          allModels.filter((m) => m.capabilities.supportsReasoning),
+          (m) => getCompositeBenchmarkScore(m, "reasoning") ?? getCompositeBenchmarkScore(m, "general")
+        ).slice(0, limit);
 
       default:
-        return sortByBenchmark(allModels, "arenaElo", "mmluPro").slice(0, limit);
+        return sortByComposite(allModels, (m) => getCompositeBenchmarkScore(m, "general")).slice(0, limit);
     }
   }
 
@@ -174,31 +188,47 @@ export class ModelRegistry {
 // Sorting helpers
 // ============================================================
 
-function sortByBenchmark(
+function sortByComposite(
   models: UnifiedModel[],
-  primary: keyof BenchmarkScores,
-  secondary: keyof BenchmarkScores
+  scoreFn: (model: UnifiedModel) => number | undefined
 ): UnifiedModel[] {
   return [...models].sort((a, b) => {
-    const aPrimary = a.benchmarks[primary] ?? -1;
-    const bPrimary = b.benchmarks[primary] ?? -1;
-    if (aPrimary !== bPrimary) return (bPrimary as number) - (aPrimary as number);
+    const aScore = scoreFn(a);
+    const bScore = scoreFn(b);
 
-    const aSecondary = a.benchmarks[secondary] ?? -1;
-    const bSecondary = b.benchmarks[secondary] ?? -1;
-    return (bSecondary as number) - (aSecondary as number);
+    if (aScore !== undefined && bScore !== undefined && aScore !== bScore) {
+      return bScore - aScore;
+    }
+    if (aScore !== undefined && bScore === undefined) return -1;
+    if (aScore === undefined && bScore !== undefined) return 1;
+
+    return comparePricePerformance(a, b) || a.id.localeCompare(b.id);
   });
 }
 
-/** Lower price with decent benchmarks ranks higher */
-function comparePricePerformance(a: UnifiedModel, b: UnifiedModel): number {
-  const aElo = a.benchmarks.arenaElo ?? 0;
-  const bElo = b.benchmarks.arenaElo ?? 0;
-  const aBlended = a.pricing.input * 0.75 + a.pricing.output * 0.25;
-  const bBlended = b.pricing.input * 0.75 + b.pricing.output * 0.25;
+function modelMatchesFilters(model: UnifiedModel, filters: TopModelFilters): boolean {
+  if (filters.minContext !== undefined && model.capabilities.contextLength < filters.minContext) {
+    return false;
+  }
+  if (
+    filters.minReleaseDate !== undefined &&
+    (model.metadata.releaseDate === undefined || model.metadata.releaseDate < filters.minReleaseDate)
+  ) {
+    return false;
+  }
+  return true;
+}
 
-  // Score = elo / price (higher is better)
-  const aScore = aBlended > 0 ? aElo / aBlended : 0;
-  const bScore = bBlended > 0 ? bElo / bBlended : 0;
-  return bScore - aScore;
+/** Lower price with decent composite benchmarks ranks higher */
+function comparePricePerformance(a: UnifiedModel, b: UnifiedModel): number {
+  const aPerf = getOverallBenchmarkScore(a) ?? 0;
+  const bPerf = getOverallBenchmarkScore(b) ?? 0;
+  const aBlended = getBlendedTokenPrice(a);
+  const bBlended = getBlendedTokenPrice(b);
+
+  const aScore = aBlended > 0 ? aPerf / aBlended : 0;
+  const bScore = bBlended > 0 ? bPerf / bBlended : 0;
+  if (aScore !== bScore) return bScore - aScore;
+
+  return a.pricing.output - b.pricing.output;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computePercentiles } from "../data/percentiles.js";
+import { computePercentiles, getCompositeBenchmarkScore, getCostEfficiencyScore } from "../data/percentiles.js";
 import type { UnifiedModel } from "../types.js";
 
 function makeModel(
@@ -34,6 +34,34 @@ function makeModel(
     lastUpdated: new Date().toISOString(),
   };
 }
+
+describe("getCompositeBenchmarkScore", () => {
+  it("merges multiple coding sources instead of taking only the first available score", () => {
+    const model = makeModel("mixed-coder", {
+      benchmarks: {
+        sweBenchVerified: 60,
+        aiderPolyglot: 90,
+        arenaElo: 1400,
+      },
+    });
+
+    // SWE 60*2 + Aider 90*2 + normalized Arena 100*1 = 400 / 5
+    expect(getCompositeBenchmarkScore(model, "coding")).toBe(80);
+  });
+
+  it("returns undefined when a category has no source data", () => {
+    expect(getCompositeBenchmarkScore(makeModel("empty"), "coding")).toBeUndefined();
+  });
+
+  it("uses composite performance for cost efficiency", () => {
+    const model = makeModel("efficient", {
+      benchmarks: { arenaElo: 1400, sweBenchVerified: 75 },
+      pricing: { input: 1, output: 3 },
+    });
+
+    expect(getCostEfficiencyScore(model)).toBeGreaterThan(0);
+  });
+});
 
 describe("computePercentiles", () => {
   it("assigns coding percentiles based on SWE-bench and Aider scores", () => {

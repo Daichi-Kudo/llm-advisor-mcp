@@ -3,16 +3,27 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ModelRegistry } from "../data/registry.js";
 import type { UnifiedModel } from "../types.js";
 import { fmtPrice, fmtContext, fmtScore, fmtElo, freshnessFooter } from "./formatters.js";
+import { getCompositeBenchmarkScore } from "../data/percentiles.js";
+import { MCP_REGISTRY_NAME, SERVER_VERSION } from "../metadata.js";
 
 export function registerCompareTool(
   server: McpServer,
   registry: ModelRegistry
 ): void {
-  server.tool(
+  server.registerTool(
     "compare_models",
-    "Compare 2-5 LLM/VLM models side-by-side: pricing, benchmarks, capabilities. " +
-      "Returns a compact Markdown comparison table (~400 tokens).",
     {
+      title: "Compare models",
+      description:
+        `Compare 2-5 LLM/VLM models side-by-side using llm-advisor ${SERVER_VERSION} (MCP registry ${MCP_REGISTRY_NAME}): pricing, benchmarks, capabilities. ` +
+        "Returns a compact Markdown comparison table (~400 tokens).",
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+      inputSchema: {
       models: z
         .array(z.string())
         .min(2)
@@ -20,6 +31,7 @@ export function registerCompareTool(
         .describe(
           'Model IDs or partial names (e.g., ["claude-sonnet-4.6", "gpt-5.2", "gemini-3-pro"])'
         ),
+    },
     },
     async ({ models: modelQueries }) => {
       await registry.ensureLoaded();
@@ -106,6 +118,10 @@ function formatComparison(
 
   // Benchmarks — only show rows where at least one model has data
   const benchmarks: [string, (m: UnifiedModel) => string][] = [
+    ["Coding Composite", (m) => fmtScore(getCompositeBenchmarkScore(m, "coding"))],
+    ["General Composite", (m) => fmtScore(getCompositeBenchmarkScore(m, "general"))],
+    ["Math Composite", (m) => fmtScore(getCompositeBenchmarkScore(m, "math"))],
+    ["Vision Composite", (m) => fmtScore(getCompositeBenchmarkScore(m, "vision"))],
     ["SWE-bench", (m) => fmtScore(m.benchmarks.sweBenchVerified)],
     ["Aider Polyglot", (m) => fmtScore(m.benchmarks.aiderPolyglot)],
     ["Arena Elo", (m) => fmtElo(m.benchmarks.arenaElo)],
@@ -163,7 +179,8 @@ function row(label: string, values: string[]): string {
 /** Bold the best (highest) numeric value in the array */
 function highlightBest(values: string[]): string[] {
   const nums = values.map((v) => {
-    const n = parseFloat(v.replace(/[^0-9.\-]/g, ""));
+    const match = v.match(/-?\d+(?:\.\d+)?/);
+    const n = match ? Number(match[0]) : NaN;
     return isNaN(n) ? -Infinity : n;
   });
   const max = Math.max(...nums);

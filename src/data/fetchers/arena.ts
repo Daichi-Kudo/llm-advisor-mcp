@@ -1,4 +1,5 @@
 import type { InMemoryCache } from "../cache.js";
+import { SERVER_NAME, SERVER_VERSION } from "../../metadata.js";
 
 const ARENA_URL = "https://arena.ai/leaderboard/text";
 const HF_FALLBACK_URL =
@@ -94,7 +95,7 @@ async function fetchFromArenaAi(): Promise<Map<string, ArenaEntry>> {
   const response = await fetch(ARENA_URL, {
     signal: AbortSignal.timeout(20_000),
     headers: {
-      "User-Agent": "llm-advisor-mcp/0.2.0",
+      "User-Agent": `${SERVER_NAME}/${SERVER_VERSION}`,
       Accept: "text/html",
     },
   });

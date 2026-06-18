@@ -19,8 +19,10 @@ describe("fmtPrice", () => {
 
 describe("fmtContext", () => {
   it("formats millions", () => expect(fmtContext(1_000_000)).toBe("1M"));
+  it("floors non-round millions instead of overstating context", () => expect(fmtContext(1_999_999)).toBe("1.9M"));
   it("formats thousands", () => expect(fmtContext(128_000)).toBe("128K"));
   it("formats small numbers", () => expect(fmtContext(512)).toBe("512"));
+  it("formats zero explicitly", () => expect(fmtContext(0)).toBe("0"));
   it("handles undefined", () => expect(fmtContext(undefined)).toBe("n/a"));
 });
 

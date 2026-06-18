@@ -8,10 +8,11 @@ import { registerModelInfoTool } from "./tools/model-info.js";
 import { registerListTopTool } from "./tools/list-top.js";
 import { registerCompareTool } from "./tools/compare.js";
 import { registerRecommendTool } from "./tools/recommend.js";
+import { SERVER_NAME, SERVER_VERSION } from "./metadata.js";
 
 const server = new McpServer({
-  name: "llm-advisor-mcp",
-  version: "0.4.0",
+  name: SERVER_NAME,
+  version: SERVER_VERSION,
 });
 
 const cache = new InMemoryCache();

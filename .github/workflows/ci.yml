@@ -21,3 +21,8 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
+      - run: npm run smoke:mcp
+        env:
+          LLM_ADVISOR_MCP_SMOKE_LIVE: "0"
+      - run: npm run smoke
+        if: matrix.node-version == 22
