@@ -168,16 +168,16 @@ async function fetchFromArenaAi(): Promise<Map<string, ArenaEntry>> {
   for (const entry of entries) {
     const name = entry.modelDisplayName;
     const rating = entry.rating;
-    if (!name || typeof rating !== "number" || rating <= 0) continue;
+    if (!name || !isFiniteNumber(rating) || rating <= 0) continue;
 
     scores.set(normalizeForIndex(name), {
       name,
       arenaScore: Math.round(rating),
-      ciLower: entry.ratingLower ? Math.round(entry.ratingLower) : undefined,
-      ciUpper: entry.ratingUpper ? Math.round(entry.ratingUpper) : undefined,
-      votes: entry.votes,
+      ciLower: isFiniteNumber(entry.ratingLower) ? Math.round(entry.ratingLower) : undefined,
+      ciUpper: isFiniteNumber(entry.ratingUpper) ? Math.round(entry.ratingUpper) : undefined,
+      votes: isFiniteNumber(entry.votes) ? entry.votes : undefined,
       organization: entry.modelOrganization ?? undefined,
-      rank: entry.rank,
+      rank: isFiniteNumber(entry.rank) ? entry.rank : undefined,
     });
   }
 
@@ -238,7 +238,7 @@ async function fetchHfPage(
     const r = row.row;
     const name = r.Model;
     const score = r["Arena Score"];
-    if (!name || typeof score !== "number") continue;
+    if (!name || !isFiniteNumber(score)) continue;
 
     // Parse CI: "(-12, +8)" or similar
     let ciLower: number | undefined;
@@ -248,8 +248,10 @@ async function fetchHfPage(
         /(-?\d+\.?\d*)\s*,\s*\+?(-?\d+\.?\d*)/
       );
       if (ciMatch) {
-        ciLower = score + parseFloat(ciMatch[1]);
-        ciUpper = score + parseFloat(ciMatch[2]);
+        const parsedLower = parseFloat(ciMatch[1]);
+        const parsedUpper = parseFloat(ciMatch[2]);
+        ciLower = Number.isFinite(parsedLower) ? score + parsedLower : undefined;
+        ciUpper = Number.isFinite(parsedUpper) ? score + parsedUpper : undefined;
       }
     }
 
@@ -258,11 +260,15 @@ async function fetchHfPage(
       arenaScore: Math.round(score),
       ciLower,
       ciUpper,
-      votes: typeof r.Votes === "number" ? r.Votes : undefined,
+      votes: isFiniteNumber(r.Votes) ? r.Votes : undefined,
       organization: typeof r.Organization === "string" ? r.Organization : undefined,
-      rank: typeof r["Rank* (UB)"] === "number" ? r["Rank* (UB)"] : undefined,
+      rank: isFiniteNumber(r["Rank* (UB)"]) ? r["Rank* (UB)"] : undefined,
     });
   }
 
   return { entries, total: data.num_rows_total };
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
 }

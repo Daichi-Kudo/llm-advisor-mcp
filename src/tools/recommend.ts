@@ -34,17 +34,20 @@ export function registerRecommendTool(
         max_input_price: z
           .number()
           .min(0)
+          .max(1_000_000)
           .optional()
           .describe("Max input price in USD per 1M tokens"),
         max_output_price: z
           .number()
           .min(0)
+          .max(1_000_000)
           .optional()
           .describe("Max output price in USD per 1M tokens"),
         min_context: z
           .number()
           .int()
           .min(1)
+          .max(100_000_000)
           .optional()
           .describe("Minimum context window in tokens"),
         require_vision: z
@@ -97,7 +100,6 @@ export function registerRecommendTool(
               text: "No models found matching your requirements. Try increasing budget or reducing constraints.",
             },
           ],
-          isError: true,
         };
       }
 

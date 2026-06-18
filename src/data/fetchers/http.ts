@@ -8,6 +8,10 @@ export async function readResponseText(
   assertContentLengthWithinLimit(response, maxBytes, label);
 
   if (!response.body) {
+    const contentLength = response.headers.get("content-length");
+    if (!contentLength) {
+      throw new Error(`${label} response has no readable body and no content-length header`);
+    }
     const text = await response.text();
     assertTextWithinLimit(text, maxBytes, label);
     return text;

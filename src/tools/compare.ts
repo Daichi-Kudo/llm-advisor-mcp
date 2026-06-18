@@ -26,7 +26,7 @@ export function registerCompareTool(
       },
       inputSchema: {
         models: z
-          .array(z.string().trim().min(1))
+          .array(z.string().trim().min(1).max(500))
           .min(2)
           .max(5)
           .describe(
@@ -65,7 +65,6 @@ export function registerCompareTool(
                   : ""),
             },
           ],
-          isError: true,
         };
       }
 

@@ -39,10 +39,7 @@ function makeModel(
 }
 
 function makeRegistry(models: UnifiedModel[]): ModelRegistry {
-  const registry = new ModelRegistry(new InMemoryCache());
-  const modelMap = (registry as unknown as { models: Map<string, UnifiedModel> }).models;
-  for (const model of models) modelMap.set(model.id, model);
-  return registry;
+  return new ModelRegistry(new InMemoryCache(), models);
 }
 
 describe("ModelRegistry.getTopModels", () => {

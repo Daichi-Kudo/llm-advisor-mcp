@@ -23,6 +23,24 @@ describe("InMemoryCache", () => {
     expect(second?.get("model")?.score).toBe(1);
   });
 
+  it("clones data on set so later caller mutation cannot change cached state", () => {
+    const cache = new InMemoryCache();
+    const models = new Map([["model", { score: 1 }]]);
+
+    cache.set("models", models, 60_000, "test");
+    models.get("model")!.score = 999;
+
+    expect(cache.get<Map<string, { score: number }>>("models")?.get("model")?.score).toBe(1);
+  });
+
+  it("rejects non-structured-cloneable cached data at set time", () => {
+    const cache = new InMemoryCache();
+
+    expect(() => cache.set("bad", { fn: () => undefined }, 60_000, "test")).toThrow(
+      /structured-cloneable/
+    );
+  });
+
   it("returns cloned stale data and marks expired entries stale", () => {
     const cache = new InMemoryCache();
     const now = 1_700_000_000_000;
@@ -67,6 +85,15 @@ describe("InMemoryCache", () => {
     expect(cache.getFreshnessInfo("models")).toEqual({ fetchedAt: now, ttl: 1_000 });
 
     vi.restoreAllMocks();
+  });
+
+  it("rejects invalid max stale ages", () => {
+    const cache = new InMemoryCache();
+    cache.set("models", new Map(), 1_000, "test");
+
+    expect(() => cache.getStaleOrNull("models", NaN)).toThrow(/maxStaleMs/);
+    expect(() => cache.getStaleOrNull("models", Infinity)).toThrow(/maxStaleMs/);
+    expect(() => cache.getStaleOrNull("models", -1)).toThrow(/maxStaleMs/);
   });
 
   it("treats exact TTL and exact max-stale boundaries as still usable", () => {

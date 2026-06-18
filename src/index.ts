@@ -38,11 +38,22 @@ async function shutdown(exitCode: number): Promise<void> {
   shuttingDown = true;
   process.exitCode = exitCode;
   await transport?.close().catch(() => undefined);
+  process.exit(exitCode);
 }
 
 installSignalHandler("SIGINT", 130);
 installSignalHandler("SIGTERM", 143);
 installSignalHandler("SIGHUP", 129);
+
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception:", err);
+  void shutdown(1);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled rejection:", reason);
+  void shutdown(1);
+});
 
 async function main() {
   // Pre-warm cache (non-blocking)

@@ -14,7 +14,8 @@
   },
   "files": [
     "dist",
-    "server.json"
+    "server.json",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -25,7 +26,7 @@
     "smoke": "tsx scripts/smoke.ts",
     "smoke:mcp": "tsx scripts/mcp-smoke.ts",
     "smoke:package": "tsx scripts/package-smoke.ts",
-    "prepublishOnly": "npm test && npm run build"
+    "prepublishOnly": "npm test && npm run build && SKIP_BUILD=1 npm run smoke:package"
   },
   "keywords": [
     "mcp",

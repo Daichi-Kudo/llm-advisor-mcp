@@ -16,7 +16,7 @@ export class InMemoryCache {
     if (!Number.isFinite(ttl) || ttl <= 0) {
       throw new Error(`Cache TTL must be a positive finite number for key ${key}`);
     }
-    this.store.set(key, { data, fetchedAt: Date.now(), ttl, source, etag });
+    this.store.set(key, { data: cloneCachedData(data), fetchedAt: Date.now(), ttl, source, etag });
   }
 
   /** Returns cached data even if stale, with a flag indicating staleness. */
@@ -28,6 +28,9 @@ export class InMemoryCache {
     if (!entry) return null;
     const ageMs = Date.now() - entry.fetchedAt;
     const stale = ageMs > entry.ttl;
+    if (maxStaleMs !== undefined && (!Number.isFinite(maxStaleMs) || maxStaleMs < 0)) {
+      throw new Error(`maxStaleMs must be a non-negative finite number for key ${key}`);
+    }
     if (maxStaleMs !== undefined && ageMs > maxStaleMs) return null;
     return { data: cloneCachedData(entry.data) as T, stale };
   }
@@ -56,5 +59,11 @@ export class InMemoryCache {
 }
 
 function cloneCachedData<T>(data: T): T {
-  return structuredClone(data);
+  try {
+    return structuredClone(data);
+  } catch (error) {
+    throw new Error(
+      `Cached data must be structured-cloneable: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
 }

@@ -120,7 +120,7 @@ function assignPercentile(
   const scored: { model: UnifiedModel; score: number }[] = [];
   for (const m of models) {
     const s = scoreFn(m);
-    if (s !== undefined) scored.push({ model: m, score: s });
+    if (s !== undefined && Number.isFinite(s)) scored.push({ model: m, score: s });
   }
 
   if (scored.length === 0) return;
@@ -130,6 +130,10 @@ function assignPercentile(
 
   // Assign percentile: fraction of models scoring strictly lower
   const total = scored.length;
+  if (total === 1) {
+    scored[0].model.percentiles[category] = 100;
+    return;
+  }
   let i = 0;
   while (i < total) {
     let j = i;
@@ -145,7 +149,7 @@ function assignPercentile(
 }
 
 function normalizeArenaElo(elo: number | undefined): number | undefined {
-  if (elo === undefined) return undefined;
+  if (elo === undefined || !Number.isFinite(elo)) return undefined;
   // Arena Elo is on a different scale (~800-1400+); clamp to keep composites bounded.
   return Math.max(0, Math.min(100, ((elo - 800) / 600) * 100));
 }
@@ -156,6 +160,7 @@ function weightedAvg(pairs: [number | undefined, number][]): number | undefined 
   let weightSum = 0;
   for (const [val, weight] of pairs) {
     if (val !== undefined) {
+      if (!Number.isFinite(val)) continue;
       sum += val * weight;
       weightSum += weight;
     }

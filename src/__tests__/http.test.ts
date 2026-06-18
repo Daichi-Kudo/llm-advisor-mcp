@@ -28,9 +28,9 @@ describe("HTTP response readers", () => {
     );
   });
 
-  it("falls back to response.text when there is no readable body and still enforces byte limits", async () => {
+  it("falls back to response.text when a non-streamed response declares a bounded content length", async () => {
     const response = {
-      headers: new Headers(),
+      headers: new Headers({ "content-length": "5" }),
       body: null,
       text: vi.fn(async () => "hello"),
     } as unknown as Response;
@@ -39,13 +39,26 @@ describe("HTTP response readers", () => {
     expect(response.text).toHaveBeenCalledOnce();
 
     const oversized = {
-      headers: new Headers(),
+      headers: new Headers({ "content-length": "5" }),
       body: null,
       text: vi.fn(async () => "hello"),
     } as unknown as Response;
     await expect(readResponseText(oversized, 4, "test source")).rejects.toThrow(
-      /test source response exceeded 4 bytes/
+      /test source response too large: 5 bytes/
     );
+  });
+
+  it("rejects non-streamed responses without content-length before reading", async () => {
+    const response = {
+      headers: new Headers(),
+      body: null,
+      text: vi.fn(async () => "hello"),
+    } as unknown as Response;
+
+    await expect(readResponseText(response, 10, "test source")).rejects.toThrow(
+      /no readable body and no content-length/
+    );
+    expect(response.text).not.toHaveBeenCalled();
   });
 
   it("parses bounded JSON responses", async () => {

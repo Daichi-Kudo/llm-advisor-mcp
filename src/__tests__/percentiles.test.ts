@@ -180,13 +180,23 @@ describe("computePercentiles", () => {
     expect(models.get("free")!.percentiles.costEfficiency).toBeUndefined();
   });
 
-  it("handles single model (percentile = 0)", () => {
+  it("handles single scored model as top percentile", () => {
     const models = new Map<string, UnifiedModel>();
     models.set("only", makeModel("only", { benchmarks: { sweBenchVerified: 50 } }));
 
     computePercentiles(models);
 
-    // Single model: lowerCount=0, total-1=0, division by (0||1) = 0
-    expect(models.get("only")!.percentiles.coding).toBe(0);
+    expect(models.get("only")!.percentiles.coding).toBe(100);
+  });
+
+  it("ignores non-finite benchmark scores when computing percentiles", () => {
+    const models = new Map<string, UnifiedModel>();
+    models.set("bad", makeModel("bad", { benchmarks: { sweBenchVerified: NaN } }));
+    models.set("good", makeModel("good", { benchmarks: { sweBenchVerified: 50 } }));
+
+    computePercentiles(models);
+
+    expect(models.get("bad")!.percentiles.coding).toBeUndefined();
+    expect(models.get("good")!.percentiles.coding).toBe(100);
   });
 });

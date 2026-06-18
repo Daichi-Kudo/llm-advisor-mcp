@@ -47,6 +47,7 @@ export function registerListTopTool(
           .number()
           .int()
           .min(1)
+          .max(100_000_000)
           .optional()
           .describe("Minimum context window in tokens"),
         min_release_date: isoDateSchema
@@ -72,7 +73,6 @@ export function registerListTopTool(
               text: `No models found for category "${category}".`,
             },
           ],
-          isError: true,
         };
       }
 

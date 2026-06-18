@@ -57,7 +57,6 @@ export function registerModelInfoTool(
               text: `Model "${escapeMarkdownInline(model)}" not found.${similar.length > 0 ? ` Did you mean: ${similar.map(escapeMarkdownInline).join(", ")}?` : ""}`,
             },
           ],
-          isError: true,
         };
       }
 

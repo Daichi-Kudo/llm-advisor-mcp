@@ -32,8 +32,12 @@ export class ModelRegistry {
   private lastLoadError: unknown;
   private ready = false;
 
-  constructor(cache: InMemoryCache) {
+  constructor(cache: InMemoryCache, initialModels: UnifiedModel[] = []) {
     this.cache = cache;
+    for (const model of initialModels) {
+      this.models.set(model.id, structuredClone(model));
+    }
+    this.ready = initialModels.length > 0;
   }
 
   /** Pre-fetch data on startup. Non-blocking — callers can use getModel even if warmup is incomplete. */
@@ -293,8 +297,8 @@ function comparePricePerformance(a: UnifiedModel, b: UnifiedModel): number {
   const aBlended = getBlendedTokenPrice(a);
   const bBlended = getBlendedTokenPrice(b);
 
-  const aScore = aBlended > 0 && aPerf !== undefined ? aPerf / aBlended : 0;
-  const bScore = bBlended > 0 && bPerf !== undefined ? bPerf / bBlended : 0;
+  const aScore = aBlended > 0 && aPerf !== undefined ? aPerf / aBlended : -Infinity;
+  const bScore = bBlended > 0 && bPerf !== undefined ? bPerf / bBlended : -Infinity;
   if (aScore !== bScore) return bScore - aScore;
 
   return a.pricing.output - b.pricing.output;

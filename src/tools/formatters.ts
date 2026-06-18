@@ -31,7 +31,7 @@ export function escapeMarkdownCell(value: string): string {
 
 export function escapeMarkdownInline(value: string): string {
   return value
-    .replace(/[&<>"'\\`*_{}\[\]()#+.!-]/g, (char) => HTML_ENTITIES[char] ?? `\\${char}`)
+    .replace(/[&<>"'\\`*_{}\[\]()#+.!~/-]/g, (char) => HTML_ENTITIES[char] ?? `\\${char}`)
     .replace(/[\r\n]+/g, " ");
 }
 
@@ -39,7 +39,10 @@ export function escapeMarkdownInline(value: string): string {
 export function fmtPrice(price: number | undefined): string {
   if (price === undefined || price === null || !Number.isFinite(price) || price < 0) return "n/a";
   if (price === 0) return "free";
-  if (price < 0.0001) return `$${price.toFixed(10).replace(/\.?0+$/, "")}`;
+  if (price < 0.0001) {
+    const fixed = price.toFixed(10).replace(/\.?0+$/, "");
+    return fixed === "0" ? "< $0.0000000001" : `$${fixed}`;
+  }
   if (price < 0.01) return `$${price.toFixed(4)}`;
   return `$${price.toFixed(2)}`;
 }

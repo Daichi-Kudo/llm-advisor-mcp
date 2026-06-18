@@ -54,6 +54,9 @@ async function main(): Promise<void> {
     if (!existsSync(join(installedPackageRoot, "server.json"))) {
       throw new Error("Packed package is missing server.json for MCP Registry discovery");
     }
+    if (!existsSync(join(installedPackageRoot, "CHANGELOG.md"))) {
+      throw new Error("Packed package is missing CHANGELOG.md release history");
+    }
 
     const client = new Client({ name: "llm-advisor-package-smoke", version: "0.0.0" });
     const transport = new StdioClientTransport({ command: bin, stderr: "pipe" });
