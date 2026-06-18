@@ -95,6 +95,20 @@ describe("ModelRegistry.getTopModels", () => {
     expect(second[0].capabilities.inputModalities).toEqual(["text"]);
   });
 
+  it("returns cloned top model objects so callers cannot mutate registry state", () => {
+    const registry = makeRegistry([
+      makeModel("top-model", { benchmarks: { arenaElo: 1400 } }),
+      makeModel("second-model", { benchmarks: { arenaElo: 1300 } }),
+    ]);
+
+    const top = registry.getTopModels("general", 1);
+    top[0].benchmarks.arenaElo = 9999;
+    top[0].capabilities.inputModalities.push("image");
+
+    expect(registry.getModel("top-model")?.benchmarks.arenaElo).toBe(1400);
+    expect(registry.getModel("top-model")?.capabilities.inputModalities).toEqual(["text"]);
+  });
+
   it("returns cloned exact and fuzzy matches", () => {
     const registry = makeRegistry([
       makeModel("provider/fuzzy-model", { benchmarks: { arenaElo: 1200 } }),

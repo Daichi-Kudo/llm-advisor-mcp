@@ -27,7 +27,7 @@ export function normalizeKey(name: string): string {
     // Strip thinking/reasoning suffixes for base model matching
     .replace(/-thinking(?:-\d+k)?$/, "")
     // Strip common variant suffixes
-    .replace(/-(chat|latest|preview|turbo|mini|fast|high|medium|low)(?=$|-)/g, (m, suffix) => {
+    .replace(/-(chat|latest|preview|turbo|mini|fast)(?=$|-)/g, (m, suffix) => {
       // Keep "preview", "mini", "fast" as they distinguish different models
       if (["preview", "mini", "fast"].includes(suffix)) return m;
       return "";
@@ -230,10 +230,10 @@ export function findMatch(
   for (const [indexedKey, id] of keyToId) {
     if (primaryKey.length < 6 || indexedKey.length < 6) continue;
     if (indexedKey.includes(primaryKey) || primaryKey.includes(indexedKey)) {
-      // A vision-variant name (e.g. "deepseek-vl-7b") must not collapse onto a
-      // non-vision base model ("deepseek-chat" → stem "deepseek"); they are
-      // different models. The reverse (Qwen2.5-VL ↔ qwen2.5-vl-72b-instruct) is fine.
-      if (primaryIsVision && !hasVisionToken(indexedKey)) continue;
+      // Vision and non-vision model lines must not collapse into each other.
+      // "DeepSeek-VL-7B" is not "deepseek-chat", and a base "Qwen2.5" score
+      // must not attach to "qwen2.5-vl-72b-instruct".
+      if (primaryIsVision !== hasVisionToken(indexedKey)) continue;
       return id;
     }
   }

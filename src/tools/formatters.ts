@@ -30,14 +30,16 @@ export function escapeMarkdownCell(value: string): string {
 }
 
 export function escapeMarkdownInline(value: string): string {
-  return value.replace(/([\\`*_{}\[\]()#+.!-])/g, "\\$1").replace(/[\r\n]+/g, " ");
+  return value
+    .replace(/[&<>"'\\`*_{}\[\]()#+.!-]/g, (char) => HTML_ENTITIES[char] ?? `\\${char}`)
+    .replace(/[\r\n]+/g, " ");
 }
 
 /** Format price as "$X.XX" or "free" */
 export function fmtPrice(price: number | undefined): string {
-  if (price === undefined || price === null || !Number.isFinite(price)) return "n/a";
+  if (price === undefined || price === null || !Number.isFinite(price) || price < 0) return "n/a";
   if (price === 0) return "free";
-  if (price < 0.0001) return `$${price.toPrecision(3).replace(/(\.\d*?[1-9])0+(?=$|e)/, "$1").replace(/\.0+(?=$|e)/, "")}`;
+  if (price < 0.0001) return `$${price.toFixed(10).replace(/\.?0+$/, "")}`;
   if (price < 0.01) return `$${price.toFixed(4)}`;
   return `$${price.toFixed(2)}`;
 }
@@ -73,6 +75,14 @@ export function fmtModalities(mods: string[]): string {
 export function escapeMarkdownTableInline(value: string): string {
   return escapeMarkdownCell(escapeMarkdownInline(value));
 }
+
+const HTML_ENTITIES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&apos;",
+};
 
 /** Data freshness footer */
 export function freshnessFooter(fetchedAt?: number): string {

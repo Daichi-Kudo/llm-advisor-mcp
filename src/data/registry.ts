@@ -57,11 +57,10 @@ export class ModelRegistry {
         this.ready = false;
         this.lastLoadFailureAt = Date.now();
         this.lastLoadError = error;
-        this.warmupPromise = null;
         throw error;
       })
       .finally(() => {
-        if (this.ready) this.warmupPromise = null;
+        this.warmupPromise = null;
       });
     return this.warmupPromise;
   }
@@ -156,59 +155,61 @@ export class ModelRegistry {
 
   /** Get top models for a category, sorted by the relevant metric */
   getTopModels(category: ModelCategory, limit = 10, filters: TopModelFilters = {}): UnifiedModel[] {
-    const allModels = this.getAllModels().filter((m) => modelMatchesFilters(m, filters));
+    const allModels = Array.from(this.models.values()).filter((m) => modelMatchesFilters(m, filters));
+    const takeCloned = (models: UnifiedModel[]): UnifiedModel[] =>
+      structuredClone(models.slice(0, limit));
 
     switch (category) {
       case "coding":
-        return sortByComposite(allModels, (m) => getCompositeBenchmarkScore(m, "coding")).slice(0, limit);
+        return takeCloned(sortByComposite(allModels, (m) => getCompositeBenchmarkScore(m, "coding")));
 
       case "math":
-        return sortByComposite(allModels, (m) => getCompositeBenchmarkScore(m, "math")).slice(0, limit);
+        return takeCloned(sortByComposite(allModels, (m) => getCompositeBenchmarkScore(m, "math")));
 
       case "vision":
-        return sortByComposite(
+        return takeCloned(sortByComposite(
           allModels.filter((m) => m.capabilities.inputModalities.includes("image")),
           (m) => getCompositeBenchmarkScore(m, "vision")
-        ).slice(0, limit);
+        ));
 
       case "general":
-        return sortByComposite(allModels, (m) => getCompositeBenchmarkScore(m, "general")).slice(0, limit);
+        return takeCloned(sortByComposite(allModels, (m) => getCompositeBenchmarkScore(m, "general")));
 
       case "cost-effective":
-        return sortByComposite(
+        return takeCloned(sortByComposite(
           allModels.filter((m) => getBlendedTokenPrice(m) > 0),
           getCostEfficiencyScore
-        ).slice(0, limit);
+        ));
 
       case "open-source":
-        return sortByComposite(
+        return takeCloned(sortByComposite(
           allModels.filter((m) => m.metadata.isOpenSource),
           (m) =>
             getCompositeBenchmarkScore(m, "general") ??
             getCompositeBenchmarkScore(m, "coding") ??
             getCompositeBenchmarkScore(m, "vision")
-        ).slice(0, limit);
+        ));
 
       case "speed":
         // Sort by price (proxy for speed — lower price models tend to be faster inference)
         // Real speed data would come from a future data source
-        return allModels
+        return takeCloned(allModels
           .sort((a, b) => a.pricing.output - b.pricing.output || a.id.localeCompare(b.id))
-          .slice(0, limit);
+        );
 
       case "context-window":
-        return allModels
+        return takeCloned(allModels
           .sort((a, b) => b.capabilities.contextLength - a.capabilities.contextLength || a.id.localeCompare(b.id))
-          .slice(0, limit);
+        );
 
       case "reasoning":
-        return sortByComposite(
+        return takeCloned(sortByComposite(
           allModels.filter((m) => m.capabilities.supportsReasoning),
           (m) => getCompositeBenchmarkScore(m, "reasoning") ?? getCompositeBenchmarkScore(m, "general")
-        ).slice(0, limit);
+        ));
 
       default:
-        return sortByComposite(allModels, (m) => getCompositeBenchmarkScore(m, "general")).slice(0, limit);
+        return takeCloned(sortByComposite(allModels, (m) => getCompositeBenchmarkScore(m, "general")));
     }
   }
 

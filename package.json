@@ -13,17 +13,19 @@
     "llm-advisor-mcp": "dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "server.json"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --clean",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && tsup src/index.ts --format esm --clean",
     "dev": "tsx src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest watch",
     "smoke": "tsx scripts/smoke.ts",
     "smoke:mcp": "tsx scripts/mcp-smoke.ts",
     "smoke:package": "tsx scripts/package-smoke.ts",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm test && npm run build"
   },
   "keywords": [
     "mcp",
@@ -59,7 +61,8 @@
   },
   "license": "MIT",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

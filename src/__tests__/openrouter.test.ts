@@ -19,15 +19,21 @@ describe("isOpenSource", () => {
     expect(isOpenSource("internlm/internlm3-8b-instruct")).toBe(true);
     expect(isOpenSource("snowflake/arctic-instruct")).toBe(true);
   });
+
+  it("only treats Grok 1, not proprietary later Grok releases, as open-source", () => {
+    expect(isOpenSource("x-ai/grok-1")).toBe(true);
+    expect(isOpenSource("x-ai/grok-1-beta")).toBe(true);
+    expect(isOpenSource("x-ai/grok-1.5")).toBe(false);
+    expect(isOpenSource("x-ai/grok-2")).toBe(false);
+  });
 });
 
 describe("fetchOpenRouterModels", () => {
   it("defaults optional architecture and top_provider fields when upstream omits them", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        json: async () => ({
+      vi.fn(async () => new Response(
+        JSON.stringify({
           data: [
             {
               id: "test/model",
@@ -39,7 +45,8 @@ describe("fetchOpenRouterModels", () => {
             },
           ],
         }),
-      }))
+        { status: 200, headers: { "content-type": "application/json" } }
+      ))
     );
 
     const models = await fetchOpenRouterModels(new InMemoryCache());
@@ -49,5 +56,38 @@ describe("fetchOpenRouterModels", () => {
     expect(models[0].capabilities.outputModalities).toEqual(["text"]);
     expect(models[0].capabilities.maxOutputTokens).toBeUndefined();
     expect(models[0].pricing.request).toBe(0.01);
+  });
+
+  it("rejects invalid upstream pricing instead of treating it as free", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: "test/invalid-price",
+              name: "Invalid Price",
+              created: 1_700_000_000,
+              context_length: 128_000,
+              pricing: { prompt: "not available", completion: "0.000002" },
+              supported_parameters: [],
+            },
+            {
+              id: "test/valid-price",
+              name: "Valid Price",
+              created: 1_700_000_000,
+              context_length: 128_000,
+              pricing: { prompt: "0.000001", completion: "0.000002" },
+              supported_parameters: [],
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      ))
+    );
+
+    const models = await fetchOpenRouterModels(new InMemoryCache());
+
+    expect(models.map((model) => model.id)).toEqual(["test/valid-price"]);
   });
 });

@@ -1,11 +1,14 @@
 import type { InMemoryCache } from "../cache.js";
 import { SERVER_NAME, SERVER_VERSION } from "../../metadata.js";
 import { normalizeForIndex } from "../normalizer.js";
+import { readResponseText } from "./http.js";
 
 const API_URL =
   "https://raw.githubusercontent.com/Aider-AI/aider/main/aider/website/_data/polyglot_leaderboard.yml";
 const CACHE_KEY = "aider:polyglot";
 const TTL = 6 * 60 * 60 * 1000; // 6 hours
+const MAX_RESPONSE_BYTES = 1 * 1024 * 1024;
+const MAX_STALE_MS = 24 * 60 * 60 * 1000;
 
 export interface AiderEntry {
   name: string;
@@ -32,11 +35,12 @@ export async function fetchAiderScores(
   const cached = cache.get<Map<string, AiderEntry>>(CACHE_KEY);
   if (cached) return cached;
 
-  const stale = cache.getStaleOrNull<Map<string, AiderEntry>>(CACHE_KEY);
+  const stale = cache.getStaleOrNull<Map<string, AiderEntry>>(CACHE_KEY, MAX_STALE_MS);
 
   try {
     const response = await fetch(API_URL, {
       headers: { "User-Agent": `${SERVER_NAME}/${SERVER_VERSION}` },
+      redirect: "error",
       signal: AbortSignal.timeout(15_000),
     });
 
@@ -44,7 +48,7 @@ export async function fetchAiderScores(
       throw new Error(`Aider leaderboard returned ${response.status}`);
     }
 
-    const text = await response.text();
+    const text = await readResponseText(response, MAX_RESPONSE_BYTES, "Aider leaderboard");
     const entries = parseSimpleYamlList(text);
     if (entries.length === 0) {
       throw new Error("Aider leaderboard parser returned no entries");
@@ -54,7 +58,7 @@ export async function fetchAiderScores(
     for (const entry of entries) {
       const model = entry.model;
       const passRate2 = parseFloat(entry.pass_rate_2);
-      if (!model || isNaN(passRate2) || passRate2 <= 0) continue;
+      if (!model || Number.isNaN(passRate2) || passRate2 <= 0) continue;
 
       const key = normalizeForIndex(model);
 
@@ -141,7 +145,7 @@ export function parseSimpleYamlList(text: string): YamlEntry[] {
 function safeParseFloat(val: string | undefined): number | undefined {
   if (!val) return undefined;
   const n = parseFloat(val);
-  return isNaN(n) ? undefined : n;
+  return Number.isNaN(n) ? undefined : n;
 }
 
 /** @internal Exported for parser regression tests only; not part of the public MCP API. */

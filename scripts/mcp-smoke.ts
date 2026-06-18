@@ -12,6 +12,7 @@ const EXPECTED_TOOLS = [
   "compare_models",
   "recommend_model",
 ] as const;
+const MAX_STDERR_CHARS = 2_000;
 
 function textContent(result: Awaited<ReturnType<Client["callTool"]>>): string {
   const content = (result as { content?: unknown }).content;
@@ -99,13 +100,19 @@ async function main(): Promise<void> {
     console.log(`MCP smoke passed: ${tools.length} tools, server ${serverVersion?.version}`);
   } catch (error) {
     if (stderr.trim()) {
-      console.error("Server stderr:");
-      console.error(stderr.trim());
+      console.error("Server stderr (truncated):");
+      console.error(truncateStderr(stderr));
     }
     throw error;
   } finally {
     await client.close().catch(() => undefined);
   }
+}
+
+function truncateStderr(stderr: string): string {
+  const trimmed = stderr.trim();
+  if (trimmed.length <= MAX_STDERR_CHARS) return trimmed;
+  return `${trimmed.slice(0, MAX_STDERR_CHARS)}\n... truncated ${trimmed.length - MAX_STDERR_CHARS} chars`;
 }
 
 main().catch((error) => {

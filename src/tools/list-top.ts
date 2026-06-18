@@ -31,13 +31,17 @@ export function registerListTopTool(
         openWorldHint: true,
       },
       inputSchema: {
-        category: z.enum(MODEL_CATEGORIES).describe("Category to rank models by"),
+        category: z
+          .enum(MODEL_CATEGORIES)
+          .describe(
+            'Category to rank models by. Note: "speed" uses output price as a proxy because live latency data is not available.'
+          ),
         limit: z
           .number()
           .int()
           .min(1)
           .max(20)
-          .optional()
+          .default(10)
           .describe("Number of models to return (default: 10)"),
         min_context: z
           .number()
@@ -54,7 +58,7 @@ export function registerListTopTool(
       const loadError = await ensureRegistryLoaded(registry);
       if (loadError) return loadError;
 
-      const effectiveLimit = limit ?? 10;
+      const effectiveLimit = limit;
       const models = registry.getTopModels(category, effectiveLimit, {
         minContext: min_context,
         minReleaseDate: min_release_date,

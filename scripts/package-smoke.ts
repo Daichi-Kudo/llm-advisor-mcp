@@ -13,6 +13,7 @@ const EXPECTED_TOOLS = [
   "compare_models",
   "recommend_model",
 ] as const;
+const MAX_STDERR_CHARS = 2_000;
 
 async function main(): Promise<void> {
   const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -40,14 +41,18 @@ async function main(): Promise<void> {
     });
 
     const bin = join(installDir, "node_modules", ".bin", "llm-advisor-mcp");
+    const installedPackageRoot = join(installDir, "node_modules", "llm-advisor-mcp");
     const installedPackageJson = JSON.parse(
-      readFileSync(join(installDir, "node_modules", "llm-advisor-mcp", "package.json"), "utf8")
+      readFileSync(join(installedPackageRoot, "package.json"), "utf8")
     ) as { main?: string; exports?: Record<string, unknown> };
     if (installedPackageJson.main !== "dist/index.js") {
       throw new Error(`Unexpected package main: ${installedPackageJson.main ?? "missing"}`);
     }
     if (installedPackageJson.exports?.["."] !== "./dist/index.js") {
       throw new Error("Package root export should point at ./dist/index.js");
+    }
+    if (!existsSync(join(installedPackageRoot, "server.json"))) {
+      throw new Error("Packed package is missing server.json for MCP Registry discovery");
     }
 
     const client = new Client({ name: "llm-advisor-package-smoke", version: "0.0.0" });
@@ -74,8 +79,8 @@ async function main(): Promise<void> {
       console.log(`Package smoke passed: ${filename}, ${tools.length} tools, server ${serverVersion.version}`);
     } catch (error) {
       if (stderr.trim()) {
-        console.error("Server stderr:");
-        console.error(stderr.trim());
+        console.error("Server stderr (truncated):");
+        console.error(truncateStderr(stderr));
       }
       throw error;
     } finally {
@@ -91,3 +96,9 @@ main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
+
+function truncateStderr(stderr: string): string {
+  const trimmed = stderr.trim();
+  if (trimmed.length <= MAX_STDERR_CHARS) return trimmed;
+  return `${trimmed.slice(0, MAX_STDERR_CHARS)}\n... truncated ${trimmed.length - MAX_STDERR_CHARS} chars`;
+}

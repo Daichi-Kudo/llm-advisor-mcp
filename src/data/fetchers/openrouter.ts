@@ -1,10 +1,13 @@
 import type { OpenRouterResponse, UnifiedModel } from "../../types.js";
 import { InMemoryCache } from "../cache.js";
 import { SERVER_NAME, SERVER_VERSION } from "../../metadata.js";
+import { readResponseJson } from "./http.js";
 
 const API_URL = "https://openrouter.ai/api/v1/models";
 const CACHE_KEY = "openrouter:models";
 const TTL = 60 * 60 * 1000; // 1 hour
+const MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
+const MAX_STALE_MS = 24 * 60 * 60 * 1000;
 
 export async function fetchOpenRouterModels(
   cache: InMemoryCache
@@ -14,7 +17,7 @@ export async function fetchOpenRouterModels(
   if (cached) return cached;
 
   // Check stale cache (use while fetching fails)
-  const stale = cache.getStaleOrNull<UnifiedModel[]>(CACHE_KEY);
+  const stale = cache.getStaleOrNull<UnifiedModel[]>(CACHE_KEY, MAX_STALE_MS);
 
   try {
     const response = await fetch(API_URL, {
@@ -22,6 +25,7 @@ export async function fetchOpenRouterModels(
         "Accept": "application/json",
         "User-Agent": `${SERVER_NAME}/${SERVER_VERSION}`,
       },
+      redirect: "error",
       signal: AbortSignal.timeout(15_000),
     });
 
@@ -29,14 +33,19 @@ export async function fetchOpenRouterModels(
       throw new Error(`OpenRouter API returned ${response.status}`);
     }
 
-    const data = (await response.json()) as OpenRouterResponse;
+    const data = await readResponseJson<OpenRouterResponse>(
+      response,
+      MAX_RESPONSE_BYTES,
+      "OpenRouter API"
+    );
     if (!data || !Array.isArray(data.data)) {
       throw new Error("Invalid OpenRouter API response: missing data array");
     }
     const models = data.data
       .filter((m) => {
-        const prompt = parseFloat(m.pricing.prompt ?? "0");
-        const completion = parseFloat(m.pricing.completion ?? "0");
+        const prompt = parsePerTokenPrice(m.pricing.prompt);
+        const completion = parsePerTokenPrice(m.pricing.completion);
+        if (prompt === undefined || completion === undefined) return false;
         // Exclude free models (both prices 0), accepting either string or numeric upstream shapes.
         if (prompt === 0 && completion === 0) return false;
         // Exclude OpenRouter meta-models (virtual routing models with negative/invalid pricing)
@@ -63,9 +72,8 @@ export async function fetchOpenRouterModels(
 
 function transformModel(raw: OpenRouterResponse["data"][0]): UnifiedModel {
   const perTokenToPerMillion = (s: string | undefined): number | undefined => {
-    if (!s || s === "0") return undefined;
-    const n = parseFloat(s.replace(/,/g, ""));
-    return Number.isFinite(n) ? n * 1_000_000 : undefined;
+    const n = parsePerTokenPrice(s);
+    return n !== undefined && n > 0 ? n * 1_000_000 : undefined;
   };
 
   const inputPrice = perTokenToPerMillion(raw.pricing.prompt) ?? 0;
@@ -121,6 +129,12 @@ function normalizeOptionalPositiveNumber(value: unknown): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
+function parsePerTokenPrice(value: string | undefined): number | undefined {
+  if (value === undefined || value.trim() === "") return undefined;
+  const n = Number(value.replace(/,/g, ""));
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+}
+
 function extractFamily(slug: string): string {
   // claude-sonnet-4.6 → claude
   // gpt-5.1 → gpt
@@ -158,7 +172,7 @@ const OPEN_SOURCE_PATTERNS = [
 
 const PROPRIETARY_PATTERNS = [
   /gemini/i,
-  /grok-(?!1(?:\b|-))/i,
+  /grok-(?!1(?:$|[-/]))/i,
 ];
 
 export function isOpenSource(modelId: string): boolean {

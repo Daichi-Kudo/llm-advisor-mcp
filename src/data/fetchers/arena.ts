@@ -1,6 +1,7 @@
 import type { InMemoryCache } from "../cache.js";
 import { SERVER_NAME, SERVER_VERSION } from "../../metadata.js";
 import { normalizeForIndex } from "../normalizer.js";
+import { readResponseJson, readResponseText } from "./http.js";
 
 const ARENA_URL = "https://arena.ai/leaderboard/text";
 const HF_FALLBACK_URL =
@@ -8,6 +9,9 @@ const HF_FALLBACK_URL =
 const CACHE_KEY = "arena:elo";
 const TTL = 6 * 60 * 60 * 1000; // 6 hours
 const MIN_ARENA_ENTRIES = 50;
+const MAX_HTML_BYTES = 10 * 1024 * 1024;
+const MAX_HF_BYTES = 2 * 1024 * 1024;
+const MAX_STALE_MS = 24 * 60 * 60 * 1000;
 
 export interface ArenaEntry {
   name: string;
@@ -65,7 +69,7 @@ export async function fetchArenaScores(
   const cached = cache.get<Map<string, ArenaEntry>>(CACHE_KEY);
   if (cached) return cached;
 
-  const stale = cache.getStaleOrNull<Map<string, ArenaEntry>>(CACHE_KEY);
+  const stale = cache.getStaleOrNull<Map<string, ArenaEntry>>(CACHE_KEY, MAX_STALE_MS);
 
   // Try primary source first. Keep this isolated so an arena.ai network,
   // status, or parser failure still reaches the HuggingFace fallback.
@@ -105,6 +109,7 @@ export async function fetchArenaScores(
 async function fetchFromArenaAi(): Promise<Map<string, ArenaEntry>> {
   const response = await fetch(ARENA_URL, {
     signal: AbortSignal.timeout(20_000),
+    redirect: "error",
     headers: {
       "User-Agent": `${SERVER_NAME}/${SERVER_VERSION}`,
       Accept: "text/html",
@@ -115,7 +120,7 @@ async function fetchFromArenaAi(): Promise<Map<string, ArenaEntry>> {
     throw new Error(`arena.ai returned ${response.status}`);
   }
 
-  const html = await response.text();
+  const html = await readResponseText(response, MAX_HTML_BYTES, "arena.ai");
 
   // arena.ai uses React Server Components (RSC) streaming.
   // Leaderboard data is embedded in self.__next_f.push([1,"b:..."]) chunks.
@@ -218,6 +223,7 @@ async function fetchHfPage(
   const url = `${HF_FALLBACK_URL.replace("offset=0", `offset=${offset}`)}`;
   const response = await fetch(url, {
     headers: { "User-Agent": `${SERVER_NAME}/${SERVER_VERSION}` },
+    redirect: "error",
     signal: AbortSignal.timeout(15_000),
   });
 
@@ -225,7 +231,7 @@ async function fetchHfPage(
     throw new Error(`HF datasets-server returned ${response.status}`);
   }
 
-  const data = (await response.json()) as HfResponse;
+  const data = await readResponseJson<HfResponse>(response, MAX_HF_BYTES, "HF datasets-server");
   const entries: ArenaEntry[] = [];
 
   for (const row of data.rows) {

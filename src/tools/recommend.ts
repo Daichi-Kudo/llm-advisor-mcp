@@ -21,6 +21,7 @@ export function registerRecommendTool(
       title: "Recommend model",
       description:
         `Get personalized model recommendations based on use case, budget, and requirements (llm-advisor ${SERVER_VERSION}, MCP registry ${MCP_REGISTRY_NAME}). ` +
+        "The creative use case currently falls back to the general composite benchmark because no dedicated creative leaderboard is available. " +
         "Returns top 3 picks with reasoning (~350-550 tokens).",
       annotations: {
         readOnlyHint: true,

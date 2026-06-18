@@ -55,6 +55,41 @@ describe("InMemoryCache", () => {
     vi.restoreAllMocks();
   });
 
+  it("can cap stale fallback age without deleting cached freshness metadata", () => {
+    const cache = new InMemoryCache();
+    const now = 1_700_000_000_000;
+    vi.spyOn(Date, "now").mockReturnValue(now);
+    cache.set("models", new Map(), 1_000, "test");
+
+    vi.mocked(Date.now).mockReturnValue(now + 10_000);
+
+    expect(cache.getStaleOrNull("models", 5_000)).toBeNull();
+    expect(cache.getFreshnessInfo("models")).toEqual({ fetchedAt: now, ttl: 1_000 });
+
+    vi.restoreAllMocks();
+  });
+
+  it("treats exact TTL and exact max-stale boundaries as still usable", () => {
+    const cache = new InMemoryCache();
+    const now = 1_700_000_000_000;
+    vi.spyOn(Date, "now").mockReturnValue(now);
+    cache.set("models", new Map([["model", { score: 1 }]]), 1_000, "test");
+
+    vi.mocked(Date.now).mockReturnValue(now + 1_000);
+    expect(cache.getStaleOrNull("models")?.stale).toBe(false);
+
+    vi.mocked(Date.now).mockReturnValue(now + 5_000);
+    expect(cache.getStaleOrNull("models", 5_000)).not.toBeNull();
+
+    vi.restoreAllMocks();
+  });
+
+  it("returns null freshness info for missing keys", () => {
+    const cache = new InMemoryCache();
+
+    expect(cache.getFreshnessInfo("missing")).toBeNull();
+  });
+
   it("returns the oldest freshness info across known keys", () => {
     const cache = new InMemoryCache();
     const now = 1_700_000_000_000;

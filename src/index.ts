@@ -17,6 +17,8 @@ const server = new McpServer({
 
 const cache = new InMemoryCache();
 const registry = new ModelRegistry(cache);
+let transport: StdioServerTransport | null = null;
+let shuttingDown = false;
 
 // Register tools
 registerModelInfoTool(server, registry);
@@ -25,23 +27,33 @@ registerCompareTool(server, registry);
 registerRecommendTool(server, registry);
 
 // Graceful shutdown
-process.on("SIGINT", () => {
-  cache.clear();
-  process.exit(0);
-});
+function installSignalHandler(signal: NodeJS.Signals, exitCode: number): void {
+  process.on(signal, () => {
+    void shutdown(exitCode);
+  });
+}
 
-process.on("SIGTERM", () => {
-  cache.clear();
-  process.exit(0);
-});
+async function shutdown(exitCode: number): Promise<void> {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  process.exitCode = exitCode;
+  await transport?.close().catch(() => undefined);
+}
+
+installSignalHandler("SIGINT", 130);
+installSignalHandler("SIGTERM", 143);
+installSignalHandler("SIGHUP", 129);
 
 async function main() {
   // Pre-warm cache (non-blocking)
   registry.warmup().catch((err) => {
-    console.error("Cache warmup failed (will fetch on first request):", err.message);
+    console.error(
+      "Cache warmup failed (will fetch on first request):",
+      err instanceof Error ? err.message : String(err)
+    );
   });
 
-  const transport = new StdioServerTransport();
+  transport = new StdioServerTransport();
   await server.connect(transport);
 }
 

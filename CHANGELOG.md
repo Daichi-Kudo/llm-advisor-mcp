@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - Standardized cost-performance scoring on a single blended token-price formula across list and recommendation tools.
 - Hardened MCP tool protocol handling with strict calendar-date validation, non-empty model-query schemas, escaped external Markdown fields, and a package override for the dev-only `esbuild` audit advisory.
 - Fixed distribution hygiene by keeping the package root non-importable, removing CLI-only declaration output, validating built package artifacts before pack smoke tests, and relying on the `files` allowlist instead of `.npmignore`.
+- Fixed package safety gates so builds run `tsc --noEmit`, publishes run tests before bundling, npm engine requirements include the lockfile-compatible npm floor, Docker installs CA certificates explicitly, and Grok 1.5 is no longer classified as open-source.
 
 ### Changed
 - Migrated tool registration to `registerTool` with read-only/idempotent MCP annotations and versioned descriptions for better client compatibility.
@@ -17,6 +18,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Added regression tests for filtering, cache cloning/freshness, fetcher parser helpers, registry mutation isolation, formatting/schema edge cases, and MCP metadata.
+- Added coverage for HTTP response byte limits, registry top-model clone isolation, negative price formatting, Grok open-source classification, cache boundary behavior, and MCP registry metadata constraints.
 - Added `npm run smoke:mcp` for a stdio MCP client smoke test that validates tool discovery, annotations, server metadata, and a live tool call.
 - Added `npm run smoke:package` to pack, install, and verify the published binary layout before release.
 

@@ -19,10 +19,12 @@ describe("fmtPrice", () => {
     expect(fmtPrice(NaN)).toBe("n/a");
     expect(fmtPrice(Infinity)).toBe("n/a");
   });
+  it("formats negative prices as 'n/a'", () => expect(fmtPrice(-0.01)).toBe("n/a"));
   it("does not round very small non-zero prices to free-looking zeroes", () => expect(fmtPrice(0.00003)).toBe("$0.00003"));
   it("formats tiny prices without misleading trailing zeroes", () => {
     expect(fmtPrice(0.00001)).toBe("$0.00001");
     expect(fmtPrice(0.0000999)).toBe("$0.0000999");
+    expect(fmtPrice(0.0000001)).toBe("$0.0000001");
   });
   it("formats small prices with 4 decimals", () => expect(fmtPrice(0.005)).toBe("$0.0050"));
   it("formats normal prices with 2 decimals", () => expect(fmtPrice(3.0)).toBe("$3.00"));
@@ -31,6 +33,10 @@ describe("fmtPrice", () => {
 describe("escapeMarkdownInline", () => {
   it("escapes inline Markdown control characters and collapses newlines", () => {
     expect(escapeMarkdownInline("model_[x](y)#1\nnext")).toBe("model\\_\\[x\\]\\(y\\)\\#1 next");
+  });
+
+  it("escapes HTML-sensitive inline Markdown characters", () => {
+    expect(escapeMarkdownInline("<script>&'\"")).toBe("&lt;script&gt;&amp;&apos;&quot;");
   });
 });
 

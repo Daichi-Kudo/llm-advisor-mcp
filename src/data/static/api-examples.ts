@@ -43,8 +43,19 @@ export function getApiExample(
 ): { code: string; language: string } | null {
   const example = EXAMPLES[format];
   if (!example) return null;
+  const escapedModelId = format === "curl"
+    ? escapeShellSingleQuotedJsonStringContent(modelId)
+    : escapeJsonStringContent(modelId);
   return {
-    code: example.template.replace(/\{\{MODEL_ID\}\}/g, modelId),
+    code: example.template.replace(/\{\{MODEL_ID\}\}/g, () => escapedModelId),
     language: example.language,
   };
+}
+
+function escapeJsonStringContent(value: string): string {
+  return JSON.stringify(value).slice(1, -1);
+}
+
+function escapeShellSingleQuotedJsonStringContent(value: string): string {
+  return escapeJsonStringContent(value).replace(/'/g, `'"'"'`);
 }

@@ -1,6 +1,7 @@
 import type { InMemoryCache } from "../cache.js";
 import { SERVER_NAME, SERVER_VERSION } from "../../metadata.js";
 import { normalizeForIndex } from "../normalizer.js";
+import { readResponseJson } from "./http.js";
 
 // Was opencompass.openxlab.space, whose TLS cert expired 2026-04-16 (Node rejects
 // it, silently zeroing out all VLM scores). cdn.opencompass.org.cn serves the
@@ -8,6 +9,8 @@ import { normalizeForIndex } from "../normalizer.js";
 const API_URL = "https://cdn.opencompass.org.cn/assets/OpenVLM.json";
 const CACHE_KEY = "vlm:opencompass";
 const TTL = 6 * 60 * 60 * 1000; // 6 hours
+const MAX_RESPONSE_BYTES = 15 * 1024 * 1024;
+const MAX_STALE_MS = 24 * 60 * 60 * 1000;
 
 export interface VlmEntry {
   name: string;
@@ -55,19 +58,24 @@ export async function fetchVlmScores(
   const cached = cache.get<Map<string, VlmEntry>>(CACHE_KEY);
   if (cached) return cached;
 
-  const stale = cache.getStaleOrNull<Map<string, VlmEntry>>(CACHE_KEY);
+  const stale = cache.getStaleOrNull<Map<string, VlmEntry>>(CACHE_KEY, MAX_STALE_MS);
 
   try {
     const response = await fetch(API_URL, {
       headers: { "User-Agent": `${SERVER_NAME}/${SERVER_VERSION}` },
-      signal: AbortSignal.timeout(30_000), // 30s — file is ~6.5MB
+      redirect: "error",
+      signal: AbortSignal.timeout(15_000), // file is ~6.5MB; keep warmup bounded with other sources
     });
 
     if (!response.ok) {
       throw new Error(`OpenCompass VLM API returned ${response.status}`);
     }
 
-    const data = (await response.json()) as OpenVlmResponse;
+    const data = await readResponseJson<OpenVlmResponse>(
+      response,
+      MAX_RESPONSE_BYTES,
+      "OpenCompass VLM API"
+    );
 
     if (!data.results || typeof data.results !== "object") {
       throw new Error("Invalid OpenCompass VLM response: no results");

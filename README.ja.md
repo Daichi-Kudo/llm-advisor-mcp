@@ -251,7 +251,7 @@ Strengths: tools, vision
 | ソース | データ内容 | モデル数 | 認証 |
 |--------|-----------|---------|------|
 | [OpenRouter](https://openrouter.ai/api/v1/models) | 価格、コンテキスト長、モダリティ、リリース日 | 300+ | 不要 |
-| [SWE-bench](https://github.com/SWE-bench/swe-bench.github.io) | コーディングベンチマーク（Verified leaderboard） | 40+ | 不要 |
+| [SWE-bench](https://github.com/SWE-bench/swe-bench.github.io) | コーディングベンチマーク（Verified leaderboard） | 30+ | 不要 |
 | [LM Arena](https://arena.ai) | 人間選好Eloレーティング | 314+ | 不要 |
 | [OpenCompass VLM](https://opencompass.org.cn) | ビジョンベンチマーク（MMMU, MMBench, OCRBench, AI2D, MathVista） | 284+ | 不要 |
 | [Aider Polyglot](https://aider.chat/docs/leaderboards/) | 多言語コーディングパスレート | 63+ | 不要 |
@@ -321,7 +321,7 @@ MCPツールの応答はLLMのコンテキストウィンドウを消費する�
 | v0.1 | `get_model_info` + `list_top_models`（OpenRouterのみ） |
 | v0.2 | `compare_models` + `recommend_model` + SWE-bench + Arena Elo統合 |
 | v0.3 | VLMベンチマーク（MMMU, MMBench, OCRBench, AI2D, MathVista）+ Aider Polyglot + パーセンタイルランク + 43テスト |
-| **v0.4**（現在）| リリース日フィルタ・鮮度スコアリング・複合ベンチマークスコア・MCPツール注釈・smoke-testゲート + 92テスト |
+| **v0.4**（現在）| リリース日フィルタ・鮮度スコアリング・複合ベンチマークスコア・MCPツール注釈・smoke-testゲート + 114テスト |
 | v1.0 | コミュニティ貢献、GitHub Actionsによる週次静的データ更新 |
 
 ---
@@ -343,9 +343,9 @@ npm install
 ### ビルド・テスト
 
 ```bash
-npm run build          # TypeScriptコンパイル（tsup）
+npm run build          # 型チェック + tsupビルド
 npm run dev            # 開発用サーバー起動（tsx）
-npm test               # テスト実行（vitest, 92テスト）
+npm test               # テスト実行（vitest, 114テスト）
 npm run test:watch     # テストウォッチモード
 ```
 

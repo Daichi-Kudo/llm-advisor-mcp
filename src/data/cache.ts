@@ -19,11 +19,16 @@ export class InMemoryCache {
     this.store.set(key, { data, fetchedAt: Date.now(), ttl, source, etag });
   }
 
-  /** Returns cached data even if stale, with a flag indicating staleness */
-  getStaleOrNull<T>(key: string): { data: T; stale: boolean } | null {
+  /** Returns cached data even if stale, with a flag indicating staleness. */
+  getStaleOrNull<T>(
+    key: string,
+    maxStaleMs?: number
+  ): { data: T; stale: boolean } | null {
     const entry = this.store.get(key);
     if (!entry) return null;
-    const stale = Date.now() - entry.fetchedAt > entry.ttl;
+    const ageMs = Date.now() - entry.fetchedAt;
+    const stale = ageMs > entry.ttl;
+    if (maxStaleMs !== undefined && ageMs > maxStaleMs) return null;
     return { data: cloneCachedData(entry.data) as T, stale };
   }
 

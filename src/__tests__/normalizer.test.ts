@@ -43,6 +43,12 @@ describe("normalizeKey", () => {
     expect(normalizeKey("gpt-5.2-mini")).toContain("mini");
   });
 
+  it("does not strip high, medium, or low inside model names", () => {
+    expect(normalizeKey("example-high-v2")).toBe("example-high-v2");
+    expect(normalizeKey("example-medium-v2")).toBe("example-medium-v2");
+    expect(normalizeKey("example-low-v2")).toBe("example-low-v2");
+  });
+
   it("lowercases and normalizes whitespace", () => {
     expect(normalizeKey("Claude 4.5 Opus")).toBe("claude-4.5-opus");
     expect(normalizeKey("GPT  5.2")).toBe("gpt-5.2");
@@ -233,6 +239,10 @@ describe("findMatch", () => {
   it("does not match a VL/vision variant to a non-vision base model", () => {
     expect(findMatch("DeepSeek-VL-7B", keyToId)).toBeNull();
     expect(findMatch("DeepSeek-VL2", keyToId)).toBeNull();
+  });
+
+  it("does not match a non-vision base name to a VL/vision indexed model", () => {
+    expect(findMatch("Qwen2.5", keyToId)).toBeNull();
   });
 
   it("still matches legitimate models (exact and substring)", () => {

@@ -12,7 +12,7 @@ MCP server giving AI assistants real-time LLM/VLM knowledge — pricing, benchma
 
 ## Architecture
 
-- TypeScript + ESM, `tsup` build, `vitest` (94 tests)
+- TypeScript + ESM, type-checked `tsup` build, `vitest` (114 tests)
 - 4 tools: `get_model_info`, `list_top_models`, `compare_models`, `recommend_model`
 - 5 fetchers: OpenRouter, SWE-bench, LM Arena, OpenCompass VLM, Aider Polyglot
 - In-memory TTL cache (1h pricing, 6h benchmarks); cross-source name normalization + composite benchmark scoring + percentile ranks

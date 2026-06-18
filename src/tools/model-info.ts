@@ -34,11 +34,11 @@ export function registerModelInfoTool(
           ),
         include_api_example: z
           .boolean()
-          .optional()
+          .default(true)
           .describe("Include API usage code example (default: true)"),
         api_format: z
           .enum(["openai_sdk", "curl", "python_requests"])
-          .optional()
+          .default("openai_sdk")
           .describe("API example format (default: openai_sdk)"),
       },
     },
@@ -65,8 +65,8 @@ export function registerModelInfoTool(
       let output = formatModelDetail(found, fetchedAt);
 
       // Add API example
-      if (include_api_example !== false) {
-        const format = api_format ?? "openai_sdk";
+      if (include_api_example) {
+        const format = api_format;
         const example = getApiExample(format, found.id);
         if (example) {
           output += `\n\n### API Example (${format})\n\`\`\`${example.language}\n${example.code}\n\`\`\``;
