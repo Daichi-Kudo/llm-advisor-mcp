@@ -16,7 +16,7 @@ export function registerCompareTool(
       title: "Compare models",
       description:
         `Compare 2-5 LLM/VLM models side-by-side using llm-advisor ${SERVER_VERSION} (MCP registry ${MCP_REGISTRY_NAME}): pricing, benchmarks, capabilities. ` +
-        "Returns a compact Markdown comparison table (~400 tokens).",
+        "Returns a compact Markdown comparison table (~400-700 tokens depending on model count).",
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -86,7 +86,7 @@ function formatComparison(
 
   lines.push(`## Model Comparison (${models.length} models)`);
   if (notFound.length > 0) {
-    lines.push(`\n> Not found: ${notFound.join(", ")}`);
+    lines.push(`\n> ⚠️ Not found: ${notFound.join(", ")}`);
   }
   lines.push("");
 
@@ -134,8 +134,8 @@ function formatComparison(
   for (const [label, extractor] of benchmarks) {
     const values = models.map(extractor);
     if (values.some((v) => v !== "n/a")) {
-      // Bold the best value
-      rows.push(row(label, highlightBest(values)));
+      const comparableCount = values.filter((v) => numericValue(v) !== undefined).length;
+      rows.push(row(label, comparableCount >= 2 ? highlightBest(values) : values));
     }
   }
 
@@ -178,13 +178,16 @@ function row(label: string, values: string[]): string {
 
 /** Bold the best (highest) numeric value in the array */
 function highlightBest(values: string[]): string[] {
-  const nums = values.map((v) => {
-    const match = v.match(/-?\d+(?:\.\d+)?/);
-    const n = match ? Number(match[0]) : NaN;
-    return isNaN(n) ? -Infinity : n;
-  });
+  const nums = values.map((v) => numericValue(v) ?? -Infinity);
   const max = Math.max(...nums);
   if (max === -Infinity) return values;
 
   return values.map((v, i) => (nums[i] === max && v !== "n/a" ? `**${v}**` : v));
+}
+
+function numericValue(value: string): number | undefined {
+  const match = value.match(/-?\d+(?:\.\d+)?/);
+  if (!match) return undefined;
+  const n = Number(match[0]);
+  return Number.isFinite(n) ? n : undefined;
 }

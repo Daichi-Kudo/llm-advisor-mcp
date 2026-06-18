@@ -82,6 +82,7 @@ export async function fetchArenaScores(
 
     throw new Error("Both Arena sources returned empty data");
   } catch (error) {
+    console.error(`Arena leaderboard fetch failed: ${error instanceof Error ? error.message : String(error)}`);
     if (stale) return stale.data;
     return new Map();
   }
@@ -200,6 +201,7 @@ async function fetchHfPage(
 ): Promise<{ entries: ArenaEntry[]; total: number }> {
   const url = `${HF_FALLBACK_URL.replace("offset=0", `offset=${offset}`)}`;
   const response = await fetch(url, {
+    headers: { "User-Agent": `${SERVER_NAME}/${SERVER_VERSION}` },
     signal: AbortSignal.timeout(15_000),
   });
 

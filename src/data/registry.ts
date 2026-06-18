@@ -23,6 +23,7 @@ export class ModelRegistry {
   private models = new Map<string, UnifiedModel>();
   private cache: InMemoryCache;
   private warmupPromise: Promise<void> | null = null;
+  private ready = false;
 
   constructor(cache: InMemoryCache) {
     this.cache = cache;
@@ -31,15 +32,28 @@ export class ModelRegistry {
   /** Pre-fetch data on startup. Non-blocking — callers can use getModel even if warmup is incomplete. */
   async warmup(): Promise<void> {
     if (this.warmupPromise) return this.warmupPromise;
-    this.warmupPromise = this._loadData();
+    this.warmupPromise = this._loadData()
+      .then(() => {
+        this.ready = true;
+      })
+      .catch((error) => {
+        this.ready = false;
+        this.warmupPromise = null;
+        throw error;
+      })
+      .finally(() => {
+        if (this.ready) this.warmupPromise = null;
+      });
     return this.warmupPromise;
   }
 
   private async _loadData(): Promise<void> {
+    const models = new Map<string, UnifiedModel>();
+
     // Phase 1: Load base model data from OpenRouter (required)
     const openRouterModels = await fetchOpenRouterModels(this.cache);
     for (const model of openRouterModels) {
-      this.models.set(model.id, model);
+      models.set(model.id, model);
     }
 
     // Phase 2: Enrich with benchmark data (best-effort, parallel)
@@ -50,15 +64,16 @@ export class ModelRegistry {
       fetchAiderScores(this.cache).catch(() => new Map()),
     ]);
 
-    mergeBenchmarkData(this.models, sweScores, arenaScores, vlmScores, aiderScores);
+    mergeBenchmarkData(models, sweScores, arenaScores, vlmScores, aiderScores);
 
     // Phase 3: Compute percentile ranks across all models
-    computePercentiles(this.models);
+    computePercentiles(models);
+    this.models = models;
   }
 
   /** Ensure data is loaded, refreshing if needed */
   async ensureLoaded(): Promise<void> {
-    if (this.models.size === 0) {
+    if (!this.ready) {
       await this.warmup();
     }
   }
@@ -141,7 +156,7 @@ export class ModelRegistry {
 
       case "cost-effective":
         return sortByComposite(
-          allModels.filter((m) => m.pricing.input > 0),
+          allModels.filter((m) => getBlendedTokenPrice(m) > 0),
           getCostEfficiencyScore
         ).slice(0, limit);
 
@@ -221,13 +236,15 @@ function modelMatchesFilters(model: UnifiedModel, filters: TopModelFilters): boo
 
 /** Lower price with decent composite benchmarks ranks higher */
 function comparePricePerformance(a: UnifiedModel, b: UnifiedModel): number {
-  const aPerf = getOverallBenchmarkScore(a) ?? 0;
-  const bPerf = getOverallBenchmarkScore(b) ?? 0;
+  const aPerf = getOverallBenchmarkScore(a);
+  const bPerf = getOverallBenchmarkScore(b);
+  if (aPerf !== undefined && bPerf === undefined) return -1;
+  if (aPerf === undefined && bPerf !== undefined) return 1;
   const aBlended = getBlendedTokenPrice(a);
   const bBlended = getBlendedTokenPrice(b);
 
-  const aScore = aBlended > 0 ? aPerf / aBlended : 0;
-  const bScore = bBlended > 0 ? bPerf / bBlended : 0;
+  const aScore = aBlended > 0 && aPerf !== undefined ? aPerf / aBlended : 0;
+  const bScore = bBlended > 0 && bPerf !== undefined ? bPerf / bBlended : 0;
   if (aScore !== bScore) return bScore - aScore;
 
   return a.pricing.output - b.pricing.output;

@@ -1,5 +1,6 @@
 import type { OpenRouterResponse, UnifiedModel } from "../../types.js";
 import { InMemoryCache } from "../cache.js";
+import { SERVER_NAME, SERVER_VERSION } from "../../metadata.js";
 
 const API_URL = "https://openrouter.ai/api/v1/models";
 const CACHE_KEY = "openrouter:models";
@@ -17,7 +18,10 @@ export async function fetchOpenRouterModels(
 
   try {
     const response = await fetch(API_URL, {
-      headers: { "Accept": "application/json" },
+      headers: {
+        "Accept": "application/json",
+        "User-Agent": `${SERVER_NAME}/${SERVER_VERSION}`,
+      },
       signal: AbortSignal.timeout(15_000),
     });
 
@@ -26,6 +30,9 @@ export async function fetchOpenRouterModels(
     }
 
     const data = (await response.json()) as OpenRouterResponse;
+    if (!data || !Array.isArray(data.data)) {
+      throw new Error("Invalid OpenRouter API response: missing data array");
+    }
     const models = data.data
       .filter((m) => {
         // Exclude free models (both prices "0")
@@ -40,9 +47,14 @@ export async function fetchOpenRouterModels(
       })
       .map(transformModel);
 
+    if (models.length === 0) {
+      throw new Error("OpenRouter API returned no usable paid models");
+    }
+
     cache.set(CACHE_KEY, models, TTL, "openrouter");
     return models;
   } catch (error) {
+    console.error(`OpenRouter fetch failed: ${error instanceof Error ? error.message : String(error)}`);
     // Return stale data if available
     if (stale) return stale.data;
     throw error;
@@ -52,7 +64,7 @@ export async function fetchOpenRouterModels(
 function transformModel(raw: OpenRouterResponse["data"][0]): UnifiedModel {
   const perTokenToPerMillion = (s: string | undefined): number | undefined => {
     if (!s || s === "0") return undefined;
-    const n = parseFloat(s);
+    const n = parseFloat(s.replace(/,/g, ""));
     return isNaN(n) ? undefined : n * 1_000_000;
   };
 
@@ -78,8 +90,8 @@ function transformModel(raw: OpenRouterResponse["data"][0]): UnifiedModel {
     },
     benchmarks: {},
     capabilities: {
-      contextLength: raw.context_length,
-      maxOutputTokens: raw.top_provider.max_completion_tokens ?? undefined,
+      contextLength: normalizePositiveNumber(raw.context_length),
+      maxOutputTokens: normalizeOptionalPositiveNumber(raw.top_provider.max_completion_tokens),
       inputModalities: raw.architecture.input_modalities ?? ["text"],
       outputModalities: raw.architecture.output_modalities ?? ["text"],
       supportsTools: raw.supported_parameters?.includes("tools") ?? false,
@@ -97,6 +109,16 @@ function transformModel(raw: OpenRouterResponse["data"][0]): UnifiedModel {
     percentiles: {},
     lastUpdated: new Date().toISOString(),
   };
+}
+
+function normalizePositiveNumber(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function normalizeOptionalPositiveNumber(value: unknown): number | undefined {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
 function extractFamily(slug: string): string {

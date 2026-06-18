@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { SERVER_NAME } from "../src/metadata.js";
@@ -14,7 +15,7 @@ const EXPECTED_TOOLS = [
 ] as const;
 
 async function main(): Promise<void> {
-  const projectRoot = resolve(new URL("..", import.meta.url).pathname);
+  const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
   execFileSync("npm", ["run", "build"], { cwd: projectRoot, stdio: "inherit" });
   const packJson = execFileSync("npm", ["pack", "--json"], {
     cwd: projectRoot,

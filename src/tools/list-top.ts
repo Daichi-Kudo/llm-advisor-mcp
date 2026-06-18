@@ -21,7 +21,8 @@ export function registerListTopTool(
       description:
         `List top-ranked LLM/VLM models for a category (llm-advisor ${SERVER_VERSION}, MCP registry ${MCP_REGISTRY_NAME}). ` +
         "Categories: coding, math, vision, general, cost-effective, open-source, speed, context-window, reasoning. " +
-        "Returns a compact Markdown table (~250 tokens).",
+        "Speed uses output price as a proxy because live latency data is not available. " +
+        "Returns a compact Markdown table (~250-500 tokens depending on limit).",
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -75,6 +76,7 @@ export function registerListTopTool(
               text: `No models found for category "${category}".`,
             },
           ],
+          isError: true,
         };
       }
 
@@ -154,7 +156,7 @@ function getKeyScoreExtractor(
         );
 
     case "speed":
-      return (m) => `${fmtPrice(m.pricing.output)}/1M out`;
+      return (m) => `${fmtPrice(m.pricing.output)}/1M out (price proxy)`;
 
     case "context-window":
       return (m) => fmtContext(m.capabilities.contextLength);

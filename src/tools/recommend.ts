@@ -20,7 +20,7 @@ export function registerRecommendTool(
       title: "Recommend model",
       description:
         `Get personalized model recommendations based on use case, budget, and requirements (llm-advisor ${SERVER_VERSION}, MCP registry ${MCP_REGISTRY_NAME}). ` +
-        "Returns top 3 picks with reasoning (~350 tokens).",
+        "Returns top 3 picks with reasoning (~350-550 tokens).",
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -109,9 +109,10 @@ export function registerRecommendTool(
           content: [
             {
               type: "text" as const,
-              text: "No models match your criteria. Try relaxing the budget or requirements.",
+              text: "No models found matching your requirements. Try increasing budget or reducing constraints.",
             },
           ],
+          isError: true,
         };
       }
 
@@ -207,6 +208,7 @@ function getBenchmarkScore(model: UnifiedModel, useCase: UseCase): number {
     case "general":
       return getCompositeBenchmarkScore(model, "general") ?? 0;
     case "creative":
+      // Creative reuses the general benchmark composite; there is no dedicated creative leaderboard yet.
       return getCompositeBenchmarkScore(model, "creative") ?? 0;
     case "cost-effective":
       return getOverallBenchmarkScore(model) ?? 0;
@@ -270,7 +272,6 @@ function formatRecommendations(
     if (model.capabilities.supportsTools) strengths.push("tools");
     if (model.capabilities.inputModalities.includes("image")) strengths.push("vision");
     if (model.capabilities.contextLength >= 1_000_000) strengths.push("1M+ context");
-    if (model.pricing.input === 0 && model.pricing.output === 0) strengths.push("free");
     if (strengths.length > 0) {
       lines.push(`Strengths: ${strengths.join(", ")}`);
     }

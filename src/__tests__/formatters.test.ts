@@ -13,6 +13,7 @@ import type { UnifiedModel } from "../types.js";
 describe("fmtPrice", () => {
   it("formats zero as 'free'", () => expect(fmtPrice(0)).toBe("free"));
   it("formats undefined as 'n/a'", () => expect(fmtPrice(undefined)).toBe("n/a"));
+  it("does not round very small non-zero prices to free-looking zeroes", () => expect(fmtPrice(0.00003)).toBe("$0.0000300"));
   it("formats small prices with 4 decimals", () => expect(fmtPrice(0.005)).toBe("$0.0050"));
   it("formats normal prices with 2 decimals", () => expect(fmtPrice(3.0)).toBe("$3.00"));
 });

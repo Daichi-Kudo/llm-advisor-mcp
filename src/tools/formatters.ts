@@ -15,8 +15,7 @@ export function buildMarkdownTable(
 
   let table = [headerLine, separatorLine, ...dataLines].join("\n");
   if (truncated) {
-    const note = [`+${rows.length - maxRows} more`, ...headers.slice(1).map(() => "")];
-    table += `\n| ${note.join(" | ")} |`;
+    table += `\n\n> +${rows.length - maxRows} more rows`;
   }
   return table;
 }
@@ -25,6 +24,7 @@ export function buildMarkdownTable(
 export function fmtPrice(price: number | undefined): string {
   if (price === undefined || price === null) return "n/a";
   if (price === 0) return "free";
+  if (price < 0.0001) return `$${price.toPrecision(3)}`;
   if (price < 0.01) return `$${price.toFixed(4)}`;
   return `$${price.toFixed(2)}`;
 }
@@ -42,13 +42,13 @@ export function fmtContext(tokens: number | undefined): string {
 
 /** Format benchmark score: 72.1 → "72.1%" or "n/a" */
 export function fmtScore(score: number | undefined): string {
-  if (score === undefined || score === null) return "n/a";
+  if (score === undefined || score === null || !Number.isFinite(score)) return "n/a";
   return `${score.toFixed(1)}%`;
 }
 
 /** Format Elo rating */
 export function fmtElo(elo: number | undefined): string {
-  if (elo === undefined || elo === null) return "n/a";
+  if (elo === undefined || elo === null || !Number.isFinite(elo)) return "n/a";
   return String(Math.round(elo));
 }
 
@@ -103,7 +103,7 @@ export function formatModelDetail(model: UnifiedModel, fetchedAt?: number): stri
 
   // Benchmarks (only non-null)
   const benchEntries = Object.entries(model.benchmarks).filter(
-    ([, v]) => v !== undefined && v !== null
+    (entry): entry is [string, number] => entry[1] !== undefined && entry[1] !== null
   );
   if (benchEntries.length > 0) {
     lines.push("");
@@ -112,7 +112,7 @@ export function formatModelDetail(model: UnifiedModel, fetchedAt?: number): stri
     lines.push("|-----------|-------|");
     for (const [key, value] of benchEntries) {
       const label = benchmarkLabel(key);
-      const formatted = key === "arenaElo" ? fmtElo(value as number) : fmtScore(value as number);
+      const formatted = key === "arenaElo" ? fmtElo(value) : fmtScore(value);
       lines.push(`| ${label} | ${formatted} |`);
     }
   }

@@ -17,7 +17,7 @@ export function getBlendedTokenPrice(m: UnifiedModel): number {
 
 /**
  * Compute percentile ranks for all models across five categories.
- * Percentile = (number of models scoring lower / total models with a score) * 100.
+ * Percentile = (number of models scoring lower / (total models with a score - 1)) * 100.
  * Models without relevant benchmarks get no percentile for that category.
  */
 export function computePercentiles(models: Map<string, UnifiedModel>): void {

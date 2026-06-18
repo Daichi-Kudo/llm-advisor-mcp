@@ -1,4 +1,5 @@
 import type { InMemoryCache } from "../cache.js";
+import { SERVER_NAME, SERVER_VERSION } from "../../metadata.js";
 
 // Was opencompass.openxlab.space, whose TLS cert expired 2026-04-16 (Node rejects
 // it, silently zeroing out all VLM scores). cdn.opencompass.org.cn serves the
@@ -57,6 +58,7 @@ export async function fetchVlmScores(
 
   try {
     const response = await fetch(API_URL, {
+      headers: { "User-Agent": `${SERVER_NAME}/${SERVER_VERSION}` },
       signal: AbortSignal.timeout(30_000), // 30s — file is ~6.5MB
     });
 
@@ -109,6 +111,7 @@ export async function fetchVlmScores(
     cache.set(CACHE_KEY, scores, TTL, "opencompass");
     return scores;
   } catch (error) {
+    console.error(`OpenCompass VLM fetch failed: ${error instanceof Error ? error.message : String(error)}`);
     if (stale) return stale.data;
     return new Map();
   }

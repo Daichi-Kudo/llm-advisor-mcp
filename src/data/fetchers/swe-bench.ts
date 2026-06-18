@@ -1,4 +1,5 @@
 import type { InMemoryCache } from "../cache.js";
+import { SERVER_NAME, SERVER_VERSION } from "../../metadata.js";
 
 const API_URL =
   "https://raw.githubusercontent.com/SWE-bench/swe-bench.github.io/master/data/leaderboards.json";
@@ -38,6 +39,7 @@ export async function fetchSweBenchScores(
 
   try {
     const response = await fetch(API_URL, {
+      headers: { "User-Agent": `${SERVER_NAME}/${SERVER_VERSION}` },
       signal: AbortSignal.timeout(15_000),
     });
 
@@ -73,6 +75,7 @@ export async function fetchSweBenchScores(
     cache.set(CACHE_KEY, modelScores, TTL, "swe-bench");
     return modelScores;
   } catch (error) {
+    console.error(`SWE-bench fetch failed: ${error instanceof Error ? error.message : String(error)}`);
     if (stale) return stale.data;
     return new Map();
   }

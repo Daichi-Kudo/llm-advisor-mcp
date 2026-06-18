@@ -1,4 +1,5 @@
 import type { InMemoryCache } from "../cache.js";
+import { SERVER_NAME, SERVER_VERSION } from "../../metadata.js";
 
 const API_URL =
   "https://raw.githubusercontent.com/Aider-AI/aider/main/aider/website/_data/polyglot_leaderboard.yml";
@@ -34,6 +35,7 @@ export async function fetchAiderScores(
 
   try {
     const response = await fetch(API_URL, {
+      headers: { "User-Agent": `${SERVER_NAME}/${SERVER_VERSION}` },
       signal: AbortSignal.timeout(15_000),
     });
 
@@ -69,6 +71,7 @@ export async function fetchAiderScores(
     cache.set(CACHE_KEY, scores, TTL, "aider");
     return scores;
   } catch (error) {
+    console.error(`Aider leaderboard fetch failed: ${error instanceof Error ? error.message : String(error)}`);
     if (stale) return stale.data;
     return new Map();
   }
