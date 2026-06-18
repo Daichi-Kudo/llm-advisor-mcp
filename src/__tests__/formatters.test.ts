@@ -5,6 +5,7 @@ import {
   fmtScore,
   fmtElo,
   fmtModalities,
+  escapeMarkdownInline,
   buildMarkdownTable,
   formatModelDetail,
 } from "../tools/formatters.js";
@@ -13,9 +14,20 @@ import type { UnifiedModel } from "../types.js";
 describe("fmtPrice", () => {
   it("formats zero as 'free'", () => expect(fmtPrice(0)).toBe("free"));
   it("formats undefined as 'n/a'", () => expect(fmtPrice(undefined)).toBe("n/a"));
-  it("does not round very small non-zero prices to free-looking zeroes", () => expect(fmtPrice(0.00003)).toBe("$0.0000300"));
+  it("formats null as 'n/a'", () => expect(fmtPrice(null as unknown as undefined)).toBe("n/a"));
+  it("does not round very small non-zero prices to free-looking zeroes", () => expect(fmtPrice(0.00003)).toBe("$0.00003"));
+  it("formats tiny prices without misleading trailing zeroes", () => {
+    expect(fmtPrice(0.00001)).toBe("$0.00001");
+    expect(fmtPrice(0.0000999)).toBe("$0.0000999");
+  });
   it("formats small prices with 4 decimals", () => expect(fmtPrice(0.005)).toBe("$0.0050"));
   it("formats normal prices with 2 decimals", () => expect(fmtPrice(3.0)).toBe("$3.00"));
+});
+
+describe("escapeMarkdownInline", () => {
+  it("escapes inline Markdown control characters and collapses newlines", () => {
+    expect(escapeMarkdownInline("model_[x](y)#1\nnext")).toBe("model\\_\\[x\\]\\(y\\)\\#1 next");
+  });
 });
 
 describe("fmtContext", () => {
@@ -55,6 +67,20 @@ describe("buildMarkdownTable", () => {
     const table = buildMarkdownTable(["X"], rows, 10);
     expect(table).toContain("+5 more");
   });
+
+  it("escapes Markdown table separators in cells", () => {
+    const table = buildMarkdownTable(["A|B", "C"], [["x|y", "z\nq"]]);
+    expect(table).toContain("A\\|B");
+    expect(table).toContain("x\\|y");
+    expect(table).toContain("z q");
+  });
+
+  it("skips short rows and trims extra cells", () => {
+    const table = buildMarkdownTable(["A", "B"], [["short"], ["1", "2", "extra"]]);
+    expect(table).not.toContain("short");
+    expect(table).toContain("| 1 | 2 |");
+    expect(table).not.toContain("extra");
+  });
 });
 
 describe("formatModelDetail", () => {
@@ -86,7 +112,17 @@ describe("formatModelDetail", () => {
 
   it("includes model ID as heading", () => {
     const output = formatModelDetail(makeModel());
-    expect(output).toContain("## anthropic/claude-opus-4.6");
+    expect(output).toContain("## anthropic/claude\\-opus\\-4\\.6");
+  });
+
+  it("escapes external Markdown in headings and metadata", () => {
+    const output = formatModelDetail(makeModel({
+      id: "provider/model_[x](y)#1",
+      metadata: { provider: "provider_[x](y)#1", family: "test", isOpenSource: false },
+    }));
+
+    expect(output).toContain("## provider/model\\_\\[x\\]\\(y\\)\\#1");
+    expect(output).toContain("**Provider**: provider\\_\\[x\\]\\(y\\)\\#1");
   });
 
   it("shows pricing section", () => {

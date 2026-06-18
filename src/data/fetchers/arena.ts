@@ -1,11 +1,13 @@
 import type { InMemoryCache } from "../cache.js";
 import { SERVER_NAME, SERVER_VERSION } from "../../metadata.js";
+import { normalizeForIndex } from "../normalizer.js";
 
 const ARENA_URL = "https://arena.ai/leaderboard/text";
 const HF_FALLBACK_URL =
   "https://datasets-server.huggingface.co/rows?dataset=mathewhe/chatbot-arena-elo&config=default&split=train&offset=0&length=100";
 const CACHE_KEY = "arena:elo";
 const TTL = 6 * 60 * 60 * 1000; // 6 hours
+const MIN_ARENA_ENTRIES = 50;
 
 export interface ArenaEntry {
   name: string;
@@ -65,27 +67,35 @@ export async function fetchArenaScores(
 
   const stale = cache.getStaleOrNull<Map<string, ArenaEntry>>(CACHE_KEY);
 
+  // Try primary source first. Keep this isolated so an arena.ai network,
+  // status, or parser failure still reaches the HuggingFace fallback.
   try {
-    // Try primary source first
     const result = await fetchFromArenaAi();
-    if (result.size > 0) {
+    if (result.size >= MIN_ARENA_ENTRIES) {
       cache.set(CACHE_KEY, result, TTL, "arena.ai");
       return result;
     }
+    if (result.size > 0) {
+      console.error(`Arena primary returned only ${result.size} entries; trying HuggingFace fallback`);
+    }
+  } catch (error) {
+    console.error(`Arena primary fetch failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
 
-    // Fall back to HuggingFace datasets-server
+  // Fall back to HuggingFace datasets-server.
+  try {
     const fallback = await fetchFromHuggingFace();
     if (fallback.size > 0) {
       cache.set(CACHE_KEY, fallback, TTL, "hf-datasets");
       return fallback;
     }
-
-    throw new Error("Both Arena sources returned empty data");
+    console.error("Arena HuggingFace fallback returned empty data");
   } catch (error) {
-    console.error(`Arena leaderboard fetch failed: ${error instanceof Error ? error.message : String(error)}`);
-    if (stale) return stale.data;
-    return new Map();
+    console.error(`Arena HuggingFace fallback failed: ${error instanceof Error ? error.message : String(error)}`);
   }
+
+  if (stale) return stale.data;
+  return new Map();
 }
 
 // ============================================================
@@ -155,7 +165,7 @@ async function fetchFromArenaAi(): Promise<Map<string, ArenaEntry>> {
     const rating = entry.rating;
     if (!name || typeof rating !== "number" || rating <= 0) continue;
 
-    scores.set(normalizeArenaName(name), {
+    scores.set(normalizeForIndex(name), {
       name,
       arenaScore: Math.round(rating),
       ciLower: entry.ratingLower ? Math.round(entry.ratingLower) : undefined,
@@ -179,16 +189,22 @@ async function fetchFromHuggingFace(): Promise<Map<string, ArenaEntry>> {
   // Fetch first 100 rows
   const first = await fetchHfPage(0);
   for (const entry of first.entries) {
-    scores.set(normalizeArenaName(entry.name), entry);
+    scores.set(normalizeForIndex(entry.name), entry);
   }
 
   // Fetch remaining rows if needed
   if (first.total > 100) {
     const pages = Math.ceil(first.total / 100);
-    for (let page = 1; page < pages && page < 5; page++) {
-      const next = await fetchHfPage(page * 100);
-      for (const entry of next.entries) {
-        scores.set(normalizeArenaName(entry.name), entry);
+    const cappedPages = Math.min(pages, 5);
+    if (pages > cappedPages) {
+      console.error(`Arena HuggingFace fallback has ${first.total} rows; fetching first ${cappedPages * 100} rows only`);
+    }
+    const remainingPages = await Promise.all(
+      Array.from({ length: cappedPages - 1 }, (_, i) => fetchHfPage((i + 1) * 100))
+    );
+    for (const page of remainingPages) {
+      for (const entry of page.entries) {
+        scores.set(normalizeForIndex(entry.name), entry);
       }
     }
   }
@@ -243,23 +259,4 @@ async function fetchHfPage(
   }
 
   return { entries, total: data.num_rows_total };
-}
-
-// ============================================================
-// Name normalization
-// ============================================================
-
-/**
- * Normalize Arena model names for matching:
- * "Claude 4.5 Opus" → "claude-4.5-opus"
- * "GPT-5.1-turbo" → "gpt-5.1-turbo"
- */
-function normalizeArenaName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[()]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9.\-]/g, "")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
 }

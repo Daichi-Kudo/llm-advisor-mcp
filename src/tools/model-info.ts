@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ModelRegistry } from "../data/registry.js";
-import { formatModelDetail } from "./formatters.js";
+import { escapeMarkdownInline, formatModelDetail } from "./formatters.js";
 import { getApiExample } from "../data/static/api-examples.js";
 import { MCP_REGISTRY_NAME, SERVER_VERSION } from "../metadata.js";
 
@@ -23,20 +23,22 @@ export function registerModelInfoTool(
         openWorldHint: true,
       },
       inputSchema: {
-      model: z
-        .string()
-        .describe(
-          'Model ID or partial name (e.g., "anthropic/claude-sonnet-4.6", "gpt-5.1", "gemini")'
-        ),
-      include_api_example: z
-        .boolean()
-        .optional()
-        .describe("Include API usage code example (default: true)"),
-      api_format: z
-        .enum(["openai_sdk", "curl", "python_requests"])
-        .optional()
-        .describe("API example format (default: openai_sdk)"),
-    },
+        model: z
+          .string()
+          .trim()
+          .min(1)
+          .describe(
+            'Model ID or partial name (e.g., "anthropic/claude-sonnet-4.6", "gpt-5.1", "gemini")'
+          ),
+        include_api_example: z
+          .boolean()
+          .optional()
+          .describe("Include API usage code example (default: true)"),
+        api_format: z
+          .enum(["openai_sdk", "curl", "python_requests"])
+          .optional()
+          .describe("API example format (default: openai_sdk)"),
+      },
     },
     async ({ model, include_api_example, api_format }) => {
       await registry.ensureLoaded();
@@ -49,7 +51,7 @@ export function registerModelInfoTool(
           content: [
             {
               type: "text" as const,
-              text: `Model "${model}" not found.${similar.length > 0 ? ` Did you mean: ${similar.join(", ")}?` : ""}`,
+              text: `Model "${escapeMarkdownInline(model)}" not found.${similar.length > 0 ? ` Did you mean: ${similar.map(escapeMarkdownInline).join(", ")}?` : ""}`,
             },
           ],
           isError: true,

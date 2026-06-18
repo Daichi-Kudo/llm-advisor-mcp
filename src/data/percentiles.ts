@@ -8,8 +8,8 @@ export type CompositeScoreCategory =
   | "creative"
   | "reasoning";
 
-export const INPUT_PRICE_WEIGHT = 0.75;
-export const OUTPUT_PRICE_WEIGHT = 0.25;
+const INPUT_PRICE_WEIGHT = 0.75;
+const OUTPUT_PRICE_WEIGHT = 0.25;
 
 export function getBlendedTokenPrice(m: UnifiedModel): number {
   return m.pricing.input * INPUT_PRICE_WEIGHT + m.pricing.output * OUTPUT_PRICE_WEIGHT;
@@ -48,7 +48,6 @@ export function getCompositeBenchmarkScore(
       return weightedAvg([
         [m.benchmarks.sweBenchVerified, 2],
         [m.benchmarks.aiderPolyglot, 2],
-        [m.benchmarks.humanEval, 1],
         [normalizeArenaElo(m.benchmarks.arenaElo), 1],
       ]);
 
@@ -61,12 +60,16 @@ export function getCompositeBenchmarkScore(
       ]);
 
     case "general":
-    case "creative":
       return weightedAvg([
         [normalizeArenaElo(m.benchmarks.arenaElo), 2],
         [m.benchmarks.mmluPro, 1],
         [m.benchmarks.gpqaDiamond, 0.5],
       ]);
+
+    case "creative":
+      // No creative-specific leaderboard exists yet; general chat quality is
+      // the closest available proxy until one is added.
+      return getCompositeBenchmarkScore(m, "general");
 
     case "vision":
       // Only compute for vision-capable models
@@ -127,13 +130,17 @@ function assignPercentile(
 
   // Assign percentile: fraction of models scoring strictly lower
   const total = scored.length;
-  for (let i = 0; i < total; i++) {
-    // Handle ties: count models with strictly lower scores
-    let lowerCount = i;
-    while (lowerCount > 0 && scored[lowerCount - 1].score === scored[i].score) {
-      lowerCount--;
+  let i = 0;
+  while (i < total) {
+    let j = i;
+    while (j + 1 < total && scored[j + 1].score === scored[i].score) {
+      j++;
     }
-    scored[i].model.percentiles[category] = Math.round((lowerCount / (total - 1 || 1)) * 100);
+    const percentile = Math.round((i / (total - 1 || 1)) * 100);
+    for (let k = i; k <= j; k++) {
+      scored[k].model.percentiles[category] = percentile;
+    }
+    i = j + 1;
   }
 }
 

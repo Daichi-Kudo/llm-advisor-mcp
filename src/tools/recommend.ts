@@ -1,14 +1,15 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ModelRegistry } from "../data/registry.js";
-import type { UnifiedModel, UseCase } from "../types.js";
-import { fmtPrice, fmtContext, fmtScore, fmtElo, freshnessFooter } from "./formatters.js";
+import { ModelRegistry, modelMatchesFilters } from "../data/registry.js";
+import { USE_CASES, type UnifiedModel, type UseCase } from "../types.js";
+import { fmtPrice, fmtContext, fmtScore, fmtElo, freshnessFooter, escapeMarkdownInline } from "./formatters.js";
 import {
   getBlendedTokenPrice,
   getCompositeBenchmarkScore,
   getOverallBenchmarkScore,
 } from "../data/percentiles.js";
 import { MCP_REGISTRY_NAME, SERVER_VERSION } from "../metadata.js";
+import { isoDateSchema } from "./schemas.js";
 
 export function registerRecommendTool(
   server: McpServer,
@@ -28,38 +29,39 @@ export function registerRecommendTool(
         openWorldHint: true,
       },
       inputSchema: {
-      use_case: z
-        .enum(["coding", "math", "general", "vision", "creative", "reasoning", "cost-effective"])
-        .describe("Primary use case"),
-      max_input_price: z
-        .number()
-        .optional()
-        .describe("Max input price in USD per 1M tokens"),
-      max_output_price: z
-        .number()
-        .optional()
-        .describe("Max output price in USD per 1M tokens"),
-      min_context: z
-        .number()
-        .optional()
-        .describe("Minimum context window in tokens"),
-      require_vision: z
-        .boolean()
-        .optional()
-        .describe("Require vision/image input support"),
-      require_tools: z
-        .boolean()
-        .optional()
-        .describe("Require function/tool calling support"),
-      require_open_source: z
-        .boolean()
-        .optional()
-        .describe("Require open-source license"),
-      min_release_date: z
-        .string()
-        .optional()
-        .describe("Minimum release date (YYYY-MM-DD). Excludes older models"),
-    },
+        use_case: z.enum(USE_CASES).describe("Primary use case"),
+        max_input_price: z
+          .number()
+          .min(0)
+          .optional()
+          .describe("Max input price in USD per 1M tokens"),
+        max_output_price: z
+          .number()
+          .min(0)
+          .optional()
+          .describe("Max output price in USD per 1M tokens"),
+        min_context: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe("Minimum context window in tokens"),
+        require_vision: z
+          .boolean()
+          .optional()
+          .describe("Require vision/image input support"),
+        require_tools: z
+          .boolean()
+          .optional()
+          .describe("Require function/tool calling support"),
+        require_open_source: z
+          .boolean()
+          .optional()
+          .describe("Require open-source license"),
+        min_release_date: isoDateSchema
+          .optional()
+          .describe("Minimum release date (YYYY-MM-DD). Excludes older models"),
+      },
     },
     async ({
       use_case,
@@ -73,36 +75,17 @@ export function registerRecommendTool(
     }) => {
       await registry.ensureLoaded();
 
-      let candidates = registry.getAllModels();
-
-      // Apply hard filters
-      if (max_input_price !== undefined) {
-        candidates = candidates.filter((m) => m.pricing.input <= max_input_price);
-      }
-      if (max_output_price !== undefined) {
-        candidates = candidates.filter((m) => m.pricing.output <= max_output_price);
-      }
-      if (min_context !== undefined) {
-        candidates = candidates.filter(
-          (m) => m.capabilities.contextLength >= min_context
-        );
-      }
-      if (require_vision) {
-        candidates = candidates.filter((m) =>
-          m.capabilities.inputModalities.includes("image")
-        );
-      }
-      if (require_tools) {
-        candidates = candidates.filter((m) => m.capabilities.supportsTools);
-      }
-      if (require_open_source) {
-        candidates = candidates.filter((m) => m.metadata.isOpenSource);
-      }
-      if (min_release_date) {
-        candidates = candidates.filter(
-          (m) => m.metadata.releaseDate !== undefined && m.metadata.releaseDate >= min_release_date
-        );
-      }
+      const candidates = registry.getAllModels().filter((m) =>
+        modelMatchesFilters(m, {
+          maxInputPrice: max_input_price,
+          maxOutputPrice: max_output_price,
+          minContext: min_context,
+          minReleaseDate: min_release_date,
+          requireVision: require_vision,
+          requireTools: require_tools,
+          requireOpenSource: require_open_source,
+        })
+      );
 
       if (candidates.length === 0) {
         return {
@@ -118,7 +101,7 @@ export function registerRecommendTool(
 
       // Score and rank
       const scored = candidates
-        .map((m) => ({ model: m, score: computeScore(m, use_case as UseCase) }))
+        .map((m) => ({ model: m, score: computeScore(m, use_case) }))
         .sort((a, b) => b.score - a.score || a.model.id.localeCompare(b.model.id))
         .slice(0, 3);
 
@@ -223,7 +206,7 @@ function formatRecommendations(
   fetchedAt?: number
 ): string {
   const lines: string[] = [];
-  lines.push(`## Recommended for: ${useCase}`);
+  lines.push(`## Recommended for: ${escapeMarkdownInline(useCase)}`);
   lines.push("");
 
   for (let i = 0; i < scored.length; i++) {
@@ -231,7 +214,7 @@ function formatRecommendations(
     const medal = ["1.", "2.", "3."][i];
 
     lines.push(
-      `### ${medal} ${model.id} (score: ${score.toFixed(0)})`
+      `### ${medal} ${escapeMarkdownInline(model.id)} (score: ${score.toFixed(0)})`
     );
 
     // Compact summary line

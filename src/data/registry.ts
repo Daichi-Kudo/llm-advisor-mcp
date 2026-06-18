@@ -15,14 +15,21 @@ import {
 } from "./percentiles.js";
 
 export interface TopModelFilters {
+  maxInputPrice?: number;
+  maxOutputPrice?: number;
   minContext?: number;
   minReleaseDate?: string;
+  requireVision?: boolean;
+  requireTools?: boolean;
+  requireOpenSource?: boolean;
 }
 
 export class ModelRegistry {
   private models = new Map<string, UnifiedModel>();
   private cache: InMemoryCache;
   private warmupPromise: Promise<void> | null = null;
+  private lastLoadFailureAt: number | null = null;
+  private lastLoadError: unknown;
   private ready = false;
 
   constructor(cache: InMemoryCache) {
@@ -32,12 +39,24 @@ export class ModelRegistry {
   /** Pre-fetch data on startup. Non-blocking — callers can use getModel even if warmup is incomplete. */
   async warmup(): Promise<void> {
     if (this.warmupPromise) return this.warmupPromise;
+    if (!this.ready && this.lastLoadFailureAt !== null) {
+      const retryAfterMs = this.lastLoadFailureAt + LOAD_RETRY_COOLDOWN_MS - Date.now();
+      if (retryAfterMs > 0) {
+        throw new Error(
+          `Model data load failed recently; retry available in ${Math.ceil(retryAfterMs / 1000)}s: ${formatLoadError(this.lastLoadError)}`
+        );
+      }
+    }
     this.warmupPromise = this._loadData()
       .then(() => {
         this.ready = true;
+        this.lastLoadFailureAt = null;
+        this.lastLoadError = undefined;
       })
       .catch((error) => {
         this.ready = false;
+        this.lastLoadFailureAt = Date.now();
+        this.lastLoadError = error;
         this.warmupPromise = null;
         throw error;
       })
@@ -82,21 +101,21 @@ export class ModelRegistry {
   getModel(query: string): UnifiedModel | null {
     // 1. Exact match by full ID
     const exact = this.models.get(query);
-    if (exact) return exact;
+    if (exact) return structuredClone(exact);
 
     const queryLower = query.toLowerCase();
     const querySlug = queryLower.replace(/[^a-z0-9/\-]/g, "");
 
     // 2. Case-insensitive exact match
     for (const [id, model] of this.models) {
-      if (id.toLowerCase() === queryLower) return model;
+      if (id.toLowerCase() === queryLower) return structuredClone(model);
     }
 
     // 3. Exact match on model part only (without provider prefix)
     //    e.g. "gpt-4o" matches "openai/gpt-4o" exactly
     for (const [id, model] of this.models) {
       const modelPart = id.split("/").slice(1).join("/").toLowerCase();
-      if (modelPart === queryLower || modelPart === querySlug) return model;
+      if (modelPart === queryLower || modelPart === querySlug) return structuredClone(model);
     }
 
     // 4. Contains match — prefer shortest ID (closest match)
@@ -109,7 +128,7 @@ export class ModelRegistry {
     }
     if (candidates.length > 0) {
       candidates.sort((a, b) => a.id.length - b.id.length);
-      return candidates[0];
+      return structuredClone(candidates[0]);
     }
 
     return null;
@@ -131,7 +150,7 @@ export class ModelRegistry {
 
   /** Get all models */
   getAllModels(): UnifiedModel[] {
-    return Array.from(this.models.values());
+    return structuredClone(Array.from(this.models.values()));
   }
 
   /** Get top models for a category, sorted by the relevant metric */
@@ -194,9 +213,22 @@ export class ModelRegistry {
 
   /** Get cache freshness info */
   getCacheFreshnessMs(): number | undefined {
-    const info = this.cache.getFreshnessInfo("openrouter:models");
+    const info = this.cache.getOldestFreshnessInfo(DATA_CACHE_KEYS);
     return info?.fetchedAt;
   }
+}
+
+const LOAD_RETRY_COOLDOWN_MS = 60_000;
+const DATA_CACHE_KEYS = [
+  "openrouter:models",
+  "swebench:verified",
+  "arena:elo",
+  "vlm:opencompass",
+  "aider:polyglot",
+];
+
+function formatLoadError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 // ============================================================
@@ -207,9 +239,10 @@ function sortByComposite(
   models: UnifiedModel[],
   scoreFn: (model: UnifiedModel) => number | undefined
 ): UnifiedModel[] {
+  const scores = new Map(models.map((model) => [model.id, scoreFn(model)]));
   return [...models].sort((a, b) => {
-    const aScore = scoreFn(a);
-    const bScore = scoreFn(b);
+    const aScore = scores.get(a.id);
+    const bScore = scores.get(b.id);
 
     if (aScore !== undefined && bScore !== undefined && aScore !== bScore) {
       return bScore - aScore;
@@ -221,8 +254,23 @@ function sortByComposite(
   });
 }
 
-function modelMatchesFilters(model: UnifiedModel, filters: TopModelFilters): boolean {
+export function modelMatchesFilters(model: UnifiedModel, filters: TopModelFilters): boolean {
+  if (filters.maxInputPrice !== undefined && model.pricing.input > filters.maxInputPrice) {
+    return false;
+  }
+  if (filters.maxOutputPrice !== undefined && model.pricing.output > filters.maxOutputPrice) {
+    return false;
+  }
   if (filters.minContext !== undefined && model.capabilities.contextLength < filters.minContext) {
+    return false;
+  }
+  if (filters.requireVision && !model.capabilities.inputModalities.includes("image")) {
+    return false;
+  }
+  if (filters.requireTools && !model.capabilities.supportsTools) {
+    return false;
+  }
+  if (filters.requireOpenSource && !model.metadata.isOpenSource) {
     return false;
   }
   if (

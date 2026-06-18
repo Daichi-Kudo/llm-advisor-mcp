@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ModelRegistry } from "../data/registry.js";
 import type { UnifiedModel } from "../types.js";
-import { fmtPrice, fmtContext, fmtScore, fmtElo, freshnessFooter } from "./formatters.js";
+import { fmtPrice, fmtContext, fmtScore, fmtElo, freshnessFooter, escapeMarkdownCell, escapeMarkdownInline, escapeMarkdownTableInline } from "./formatters.js";
 import { getCompositeBenchmarkScore } from "../data/percentiles.js";
 import { MCP_REGISTRY_NAME, SERVER_VERSION } from "../metadata.js";
 
@@ -24,14 +24,14 @@ export function registerCompareTool(
         openWorldHint: true,
       },
       inputSchema: {
-      models: z
-        .array(z.string())
-        .min(2)
-        .max(5)
-        .describe(
-          'Model IDs or partial names (e.g., ["claude-sonnet-4.6", "gpt-5.2", "gemini-3-pro"])'
-        ),
-    },
+        models: z
+          .array(z.string().trim().min(1))
+          .min(2)
+          .max(5)
+          .describe(
+            'Model IDs or partial names (e.g., ["claude-sonnet-4.6", "gpt-5.2", "gemini-3-pro"])'
+          ),
+      },
     },
     async ({ models: modelQueries }) => {
       await registry.ensureLoaded();
@@ -57,9 +57,9 @@ export function registerCompareTool(
             {
               type: "text" as const,
               text:
-                `Need at least 2 models to compare. Not found: ${notFound.join(", ")}.` +
+                `Need at least 2 models to compare. Not found: ${notFound.map(escapeMarkdownInline).join(", ")}.` +
                 (similar.length > 0
-                  ? ` Did you mean: ${similar.join(", ")}?`
+                  ? ` Did you mean: ${similar.map(escapeMarkdownInline).join(", ")}?`
                   : ""),
             },
           ],
@@ -86,12 +86,12 @@ function formatComparison(
 
   lines.push(`## Model Comparison (${models.length} models)`);
   if (notFound.length > 0) {
-    lines.push(`\n> ⚠️ Not found: ${notFound.join(", ")}`);
+    lines.push(`\n> ⚠️ Not found: ${notFound.map(escapeMarkdownInline).join(", ")}`);
   }
   lines.push("");
 
   // Header row: Feature | Model1 | Model2 | ...
-  const header = `| | ${models.map((m) => `**${m.id}**`).join(" | ")} |`;
+  const header = `| | ${models.map((m) => `**${escapeMarkdownTableInline(m.id)}**`).join(" | ")} |`;
   const sep = `|------|${models.map(() => "------").join("|")}|`;
 
   const rows: string[] = [];
@@ -173,7 +173,7 @@ function formatComparison(
 }
 
 function row(label: string, values: string[]): string {
-  return `| ${label} | ${values.join(" | ")} |`;
+  return `| ${escapeMarkdownCell(label)} | ${values.map(escapeMarkdownCell).join(" | ")} |`;
 }
 
 /** Bold the best (highest) numeric value in the array */

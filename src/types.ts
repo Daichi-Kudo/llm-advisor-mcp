@@ -43,6 +43,8 @@ export interface ModelPricing {
   input: number;
   /** USD per 1M output tokens */
   output: number;
+  /** USD per request */
+  request?: number;
   /** USD per 1M cached input tokens */
   cacheRead?: number;
   /** USD per 1M cache write tokens */
@@ -56,8 +58,6 @@ export interface ModelPricing {
 export interface BenchmarkScores {
   // Coding
   sweBenchVerified?: number;
-  sweBenchLite?: number;
-  humanEval?: number;
   aiderPolyglot?: number;
 
   // General
@@ -122,25 +122,31 @@ export interface UnifiedModel {
 // Tool parameter types
 // ============================================================
 
-export type UseCase =
-  | "coding"
-  | "math"
-  | "general"
-  | "vision"
-  | "creative"
-  | "reasoning"
-  | "cost-effective";
+export const USE_CASES = [
+  "coding",
+  "math",
+  "general",
+  "vision",
+  "creative",
+  "reasoning",
+  "cost-effective",
+] as const;
 
-export type ModelCategory =
-  | "coding"
-  | "math"
-  | "vision"
-  | "general"
-  | "cost-effective"
-  | "open-source"
-  | "speed"
-  | "context-window"
-  | "reasoning";
+export type UseCase = (typeof USE_CASES)[number];
+
+export const MODEL_CATEGORIES = [
+  "coding",
+  "math",
+  "vision",
+  "general",
+  "cost-effective",
+  "open-source",
+  "speed",
+  "context-window",
+  "reasoning",
+] as const;
+
+export type ModelCategory = (typeof MODEL_CATEGORIES)[number];
 
 // ============================================================
 // Cache types

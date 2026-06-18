@@ -4,6 +4,9 @@
   "mcpName": "io.github.Daichi-Kudo/llm-advisor",
   "description": "MCP server for LLM/VLM model selection — compare 300+ models with real-time benchmarks, pricing, and personalized recommendations. No API key required.",
   "type": "module",
+  "exports": {
+    "./package.json": "./package.json"
+  },
   "bin": {
     "llm-advisor-mcp": "dist/index.js"
   },
@@ -11,7 +14,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean",
+    "build": "tsup src/index.ts --format esm --clean",
     "dev": "tsx src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest watch",
@@ -59,6 +62,9 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "zod": "^3.23.0"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1"
   },
   "devDependencies": {
     "@types/node": "^25.9.3",

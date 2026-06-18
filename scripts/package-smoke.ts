@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,7 +16,13 @@ const EXPECTED_TOOLS = [
 
 async function main(): Promise<void> {
   const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
-  execFileSync("npm", ["run", "build"], { cwd: projectRoot, stdio: "inherit" });
+  if (!process.env.SKIP_BUILD) {
+    execFileSync("npm", ["run", "build"], { cwd: projectRoot, stdio: "inherit" });
+  }
+  const distEntry = join(projectRoot, "dist", "index.js");
+  if (!existsSync(distEntry) || statSync(distEntry).size < 1000) {
+    throw new Error(`${distEntry} is missing or unexpectedly small. Run npm run build first.`);
+  }
   const packJson = execFileSync("npm", ["pack", "--json"], {
     cwd: projectRoot,
     encoding: "utf8",

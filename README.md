@@ -307,7 +307,7 @@ For comparison, most MCP servers that return raw JSON consume 3,000-10,000 token
 | v0.1 | Done | `get_model_info` + `list_top_models` via OpenRouter |
 | v0.2 | Done | `compare_models` + `recommend_model` + SWE-bench + Arena Elo |
 | v0.3 | Done | VLM benchmarks (MMMU, MMBench, OCRBench, AI2D, MathVista) + Aider Polyglot + percentile ranks + 43 tests |
-| v0.4 | **Current** | Release-date filtering, freshness scoring, composite benchmark scoring, MCP tool annotations, smoke-test gates + 67 tests |
+| v0.4 | **Current** | Release-date filtering, freshness scoring, composite benchmark scoring, MCP tool annotations, smoke-test gates + 92 tests |
 | v1.0 | Planned | Community contributions, weekly static data snapshots via GitHub Actions |
 
 ---
@@ -320,7 +320,7 @@ cd llm-advisor-mcp
 npm install
 npm run build       # Build with tsup
 npm run dev         # Run with tsx (hot reload)
-npm test            # Run 67 unit tests (vitest)
+npm test            # Run 92 unit tests (vitest)
 npm run test:watch  # Watch mode
 ```
 
@@ -356,7 +356,7 @@ src/
 1. Fork the repository
 2. Create a feature branch
 3. Add tests for new functionality
-4. Run `npm test` to verify all 67 tests pass
+4. Run `npm test` to verify all 92 tests pass
 5. Submit a pull request
 
 ---

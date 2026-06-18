@@ -1,9 +1,10 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ModelRegistry } from "../data/registry.js";
-import type { UnifiedModel, ModelCategory } from "../types.js";
+import { MODEL_CATEGORIES, type UnifiedModel, type ModelCategory } from "../types.js";
 import { formatTopList, fmtScore, fmtElo, fmtContext, fmtPrice } from "./formatters.js";
 import { MCP_REGISTRY_NAME, SERVER_VERSION } from "../metadata.js";
+import { isoDateSchema } from "./schemas.js";
 import {
   getBlendedTokenPrice,
   getCompositeBenchmarkScore,
@@ -30,40 +31,30 @@ export function registerListTopTool(
         openWorldHint: true,
       },
       inputSchema: {
-      category: z
-        .enum([
-          "coding",
-          "math",
-          "vision",
-          "general",
-          "cost-effective",
-          "open-source",
-          "speed",
-          "context-window",
-          "reasoning",
-        ])
-        .describe("Category to rank models by"),
-      limit: z
-        .number()
-        .min(1)
-        .max(20)
-        .optional()
-        .describe("Number of models to return (default: 10)"),
-      min_context: z
-        .number()
-        .optional()
-        .describe("Minimum context window in tokens"),
-      min_release_date: z
-        .string()
-        .optional()
-        .describe("Minimum release date (YYYY-MM-DD). Excludes older models"),
-    },
+        category: z.enum(MODEL_CATEGORIES).describe("Category to rank models by"),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(20)
+          .optional()
+          .describe("Number of models to return (default: 10)"),
+        min_context: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe("Minimum context window in tokens"),
+        min_release_date: isoDateSchema
+          .optional()
+          .describe("Minimum release date (YYYY-MM-DD). Excludes older models"),
+      },
     },
     async ({ category, limit, min_context, min_release_date }) => {
       await registry.ensureLoaded();
 
       const effectiveLimit = limit ?? 10;
-      const models = registry.getTopModels(category as ModelCategory, effectiveLimit, {
+      const models = registry.getTopModels(category, effectiveLimit, {
         minContext: min_context,
         minReleaseDate: min_release_date,
       });
@@ -80,7 +71,7 @@ export function registerListTopTool(
         };
       }
 
-      const keyScoreExtractor = getKeyScoreExtractor(category as ModelCategory);
+      const keyScoreExtractor = getKeyScoreExtractor(category);
       const fetchedAt = registry.getCacheFreshnessMs();
       const output = formatTopList(
         category,

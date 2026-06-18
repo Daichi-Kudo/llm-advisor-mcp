@@ -1,5 +1,6 @@
 import type { InMemoryCache } from "../cache.js";
 import { SERVER_NAME, SERVER_VERSION } from "../../metadata.js";
+import { normalizeForIndex } from "../normalizer.js";
 
 const API_URL =
   "https://raw.githubusercontent.com/Aider-AI/aider/main/aider/website/_data/polyglot_leaderboard.yml";
@@ -52,7 +53,7 @@ export async function fetchAiderScores(
       const passRate2 = parseFloat(entry.pass_rate_2);
       if (!model || isNaN(passRate2) || passRate2 <= 0) continue;
 
-      const key = normalizeAiderName(model);
+      const key = normalizeForIndex(model);
 
       // Keep the best score per model (some models have multiple entries with different edit formats)
       const existing = scores.get(key);
@@ -95,8 +96,10 @@ interface YamlEntry {
  *     ...
  *
  * Does NOT handle: nested objects, multiline strings, anchors, etc.
+ *
+ * @internal Exported for parser regression tests only; not part of the public MCP API.
  */
-function parseSimpleYamlList(text: string): YamlEntry[] {
+export function parseSimpleYamlList(text: string): YamlEntry[] {
   const entries: YamlEntry[] = [];
   let current: YamlEntry | null = null;
 
@@ -109,14 +112,14 @@ function parseSimpleYamlList(text: string): YamlEntry[] {
     if (newItemMatch) {
       if (current) entries.push(current);
       current = {};
-      current[newItemMatch[1]] = newItemMatch[2].trim();
+      current[newItemMatch[1]] = normalizeYamlScalar(newItemMatch[2]);
       continue;
     }
 
     // Continuation: "  key: value"
     const contMatch = trimmed.match(/^\s+(\w[\w_]*):\s*(.*)$/);
     if (contMatch && current) {
-      current[contMatch[1]] = contMatch[2].trim();
+      current[contMatch[1]] = normalizeYamlScalar(contMatch[2]);
     }
   }
 
@@ -134,13 +137,9 @@ function safeParseFloat(val: string | undefined): number | undefined {
   return isNaN(n) ? undefined : n;
 }
 
-/** Normalize Aider model names for matching */
-function normalizeAiderName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[()]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9.\-]/g, "")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
+/** @internal Exported for parser regression tests only; not part of the public MCP API. */
+export function normalizeYamlScalar(value: string): string {
+  const trimmed = value.trim();
+  const quoted = trimmed.match(/^(?:"(.*)"|'(.*)')$/);
+  return quoted ? (quoted[1] ?? quoted[2] ?? "") : trimmed;
 }

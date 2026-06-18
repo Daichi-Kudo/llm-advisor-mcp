@@ -7,13 +7,16 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Corrected ranking/filtering edge cases: filters now apply before limiting, open-source classification no longer labels proprietary Gemini models as open-source, benchmark/context formatting preserves explicit zero values, and model ordering is deterministic for equal scores.
 - Standardized cost-performance scoring on a single blended token-price formula across list and recommendation tools.
+- Hardened MCP tool protocol handling with strict calendar-date validation, non-empty model-query schemas, escaped external Markdown fields, and a package override for the dev-only `esbuild` audit advisory.
+- Fixed distribution hygiene by keeping the package root non-importable, removing CLI-only declaration output, validating built package artifacts before pack smoke tests, and relying on the `files` allowlist instead of `.npmignore`.
 
 ### Changed
 - Migrated tool registration to `registerTool` with read-only/idempotent MCP annotations and versioned descriptions for better client compatibility.
 - Raised the published MCP SDK dependency floor to `^1.29.0` to match the lockfile and modern `registerTool` API usage.
+- Limited live data-source smoke checks to push builds so pull requests still verify MCP/package protocol behavior without being blocked by upstream outages.
 
 ### Added
-- Added regression tests for filtering, open-source classification, formatting edge cases, and MCP metadata.
+- Added regression tests for filtering, cache cloning/freshness, fetcher parser helpers, registry mutation isolation, formatting/schema edge cases, and MCP metadata.
 - Added `npm run smoke:mcp` for a stdio MCP client smoke test that validates tool discovery, annotations, server metadata, and a live tool call.
 - Added `npm run smoke:package` to pack, install, and verify the published binary layout before release.
 

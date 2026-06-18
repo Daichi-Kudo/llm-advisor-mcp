@@ -21,6 +21,22 @@ function textContent(result: Awaited<ReturnType<Client["callTool"]>>): string {
   return first.text;
 }
 
+async function assertToolValidationFails(
+  client: Client,
+  request: Parameters<Client["callTool"]>[0]
+): Promise<void> {
+  try {
+    const result = await client.callTool(request);
+    assert.equal(
+      (result as { isError?: boolean }).isError,
+      true,
+      `${request.name} should reject invalid arguments`
+    );
+  } catch (error) {
+    assert.match(String(error), /invalid|schema|validation|zod/i);
+  }
+}
+
 async function main(): Promise<void> {
   execFileSync("npm", ["run", "build"], { stdio: "inherit" });
   assert(existsSync(DIST_ENTRY), `${DIST_ENTRY} does not exist. Run npm run build first.`);
@@ -58,6 +74,15 @@ async function main(): Promise<void> {
       assert.equal(tool.annotations?.openWorldHint, true, `${toolName} should query open-world data`);
       assert.equal(tool.inputSchema.type, "object", `${toolName} should expose an object input schema`);
     }
+
+    await assertToolValidationFails(client, {
+      name: "compare_models",
+      arguments: { models: ["anthropic/claude", ""] },
+    });
+    await assertToolValidationFails(client, {
+      name: "list_top_models",
+      arguments: { category: "general", min_release_date: "2026-02-29" },
+    });
 
     if (process.env.LLM_ADVISOR_MCP_SMOKE_LIVE !== "0") {
       const result = await client.callTool({

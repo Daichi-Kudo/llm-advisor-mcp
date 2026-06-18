@@ -1,5 +1,6 @@
 import type { InMemoryCache } from "../cache.js";
 import { SERVER_NAME, SERVER_VERSION } from "../../metadata.js";
+import { normalizeForIndex } from "../normalizer.js";
 
 // Was opencompass.openxlab.space, whose TLS cert expired 2026-04-16 (Node rejects
 // it, silently zeroing out all VLM scores). cdn.opencompass.org.cn serves the
@@ -97,7 +98,7 @@ export async function fetchVlmScores(
       const displayName = extractDisplayName(modelData.META?.Method, modelName);
       const org = modelData.META?.Org;
 
-      scores.set(normalizeVlmName(displayName), {
+      scores.set(normalizeForIndex(displayName), {
         name: displayName,
         mmmu,
         mmBench,
@@ -121,8 +122,12 @@ export async function fetchVlmScores(
 // Helpers
 // ============================================================
 
-/** Extract a numeric score from a benchmark object */
-function extractScore(
+/**
+ * Extract a numeric score from a benchmark object.
+ *
+ * @internal Exported for parser regression tests only; not part of the public MCP API.
+ */
+export function extractScore(
   benchData: unknown,
   scoreKey: string
 ): number | undefined {
@@ -140,8 +145,10 @@ function extractScore(
 /**
  * Extract display name from META.Method field.
  * Method can be ["ModelName", "url"] or just "ModelName".
+ *
+ * @internal Exported for parser regression tests only; not part of the public MCP API.
  */
-function extractDisplayName(
+export function extractDisplayName(
   method: [string, string?] | string | unknown,
   fallback: string
 ): string {
@@ -150,15 +157,4 @@ function extractDisplayName(
   }
   if (typeof method === "string") return method;
   return fallback;
-}
-
-/** Normalize VLM model names for matching */
-function normalizeVlmName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[()]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9.\-]/g, "")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
 }

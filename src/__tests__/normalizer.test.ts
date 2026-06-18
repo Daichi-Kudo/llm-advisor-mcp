@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeKey, mergeBenchmarkData, buildKeyToId, findMatch } from "../data/normalizer.js";
+import { normalizeKey, normalizeForIndex, mergeBenchmarkData, buildKeyToId, findMatch } from "../data/normalizer.js";
 import type { UnifiedModel } from "../types.js";
 import type { SweBenchEntry } from "../data/fetchers/swe-bench.js";
 import type { ArenaEntry } from "../data/fetchers/arena.js";
@@ -25,6 +25,9 @@ describe("normalizeKey", () => {
   it("normalizes hyphens to dots for version numbers", () => {
     expect(normalizeKey("claude-opus-4-6")).toBe("claude-opus-4.6");
     expect(normalizeKey("gemini-3-1-pro")).toBe("gemini-3.1-pro");
+    expect(normalizeKey("claude-3-5-haiku")).toBe("claude-3.5-haiku");
+    expect(normalizeKey("gpt-4-1-mini")).toBe("gpt-4.1-mini");
+    expect(normalizeKey("gemini-2-5-flash")).toBe("gemini-2.5-flash");
   });
 
   it("strips -thinking suffix", () => {
@@ -46,6 +49,13 @@ describe("normalizeKey", () => {
   it("handles already-clean names", () => {
     expect(normalizeKey("claude-opus-4.6")).toBe("claude-opus-4.6");
     expect(normalizeKey("gpt-5.2")).toBe("gpt-5.2");
+  });
+});
+
+describe("normalizeForIndex", () => {
+  it("applies shared lightweight benchmark-key normalization", () => {
+    expect(normalizeForIndex("Claude 4.5 Opus (Preview)")).toBe("claude-4.5-opus-preview");
+    expect(normalizeForIndex("GPT_5.1 Turbo!!")).toBe("gpt5.1-turbo");
   });
 });
 

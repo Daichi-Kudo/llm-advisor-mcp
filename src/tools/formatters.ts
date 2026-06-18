@@ -9,9 +9,14 @@ export function buildMarkdownTable(
   const truncated = rows.length > maxRows;
   const displayRows = rows.slice(0, maxRows);
 
-  const headerLine = `| ${headers.join(" | ")} |`;
+  const safeHeaders = headers.map(escapeMarkdownCell);
+  const safeRows = displayRows
+    .filter((row) => row.length >= headers.length)
+    .map((row) => row.slice(0, headers.length).map(escapeMarkdownCell));
+
+  const headerLine = `| ${safeHeaders.join(" | ")} |`;
   const separatorLine = `|${headers.map(() => "------").join("|")}|`;
-  const dataLines = displayRows.map((row) => `| ${row.join(" | ")} |`);
+  const dataLines = safeRows.map((row) => `| ${row.join(" | ")} |`);
 
   let table = [headerLine, separatorLine, ...dataLines].join("\n");
   if (truncated) {
@@ -20,11 +25,19 @@ export function buildMarkdownTable(
   return table;
 }
 
+export function escapeMarkdownCell(value: string): string {
+  return value.replace(/\|/g, "\\|").replace(/[\r\n]+/g, " ");
+}
+
+export function escapeMarkdownInline(value: string): string {
+  return value.replace(/([\\`*_{}\[\]()#+.!-])/g, "\\$1").replace(/[\r\n]+/g, " ");
+}
+
 /** Format price as "$X.XX" or "free" */
 export function fmtPrice(price: number | undefined): string {
   if (price === undefined || price === null) return "n/a";
   if (price === 0) return "free";
-  if (price < 0.0001) return `$${price.toPrecision(3)}`;
+  if (price < 0.0001) return `$${price.toPrecision(3).replace(/(\.\d*?[1-9])0+(?=$|e)/, "$1").replace(/\.0+(?=$|e)/, "")}`;
   if (price < 0.01) return `$${price.toFixed(4)}`;
   return `$${price.toFixed(2)}`;
 }
@@ -57,6 +70,10 @@ export function fmtModalities(mods: string[]): string {
   return mods.join("+") || "text";
 }
 
+export function escapeMarkdownTableInline(value: string): string {
+  return escapeMarkdownCell(escapeMarkdownInline(value));
+}
+
 /** Data freshness footer */
 export function freshnessFooter(fetchedAt?: number): string {
   if (!fetchedAt) return "";
@@ -69,11 +86,11 @@ export function freshnessFooter(fetchedAt?: number): string {
 export function formatModelDetail(model: UnifiedModel, fetchedAt?: number): string {
   const lines: string[] = [];
 
-  lines.push(`## ${model.id}`);
+  lines.push(`## ${escapeMarkdownInline(model.id)}`);
   lines.push("");
   const metaParts = [
-    `**Provider**: ${model.metadata.provider}`,
-    `**Modality**: ${fmtModalities(model.capabilities.inputModalities)}→${fmtModalities(model.capabilities.outputModalities)}`,
+    `**Provider**: ${escapeMarkdownInline(model.metadata.provider)}`,
+    `**Modality**: ${escapeMarkdownInline(fmtModalities(model.capabilities.inputModalities))}→${escapeMarkdownInline(fmtModalities(model.capabilities.outputModalities))}`,
   ];
   if (model.metadata.releaseDate) {
     metaParts.push(`**Released**: ${model.metadata.releaseDate}`);
@@ -179,8 +196,6 @@ export function formatTopList(
 function benchmarkLabel(key: string): string {
   const labels: Record<string, string> = {
     sweBenchVerified: "SWE-bench Verified",
-    sweBenchLite: "SWE-bench Lite",
-    humanEval: "HumanEval",
     aiderPolyglot: "Aider Polyglot",
     arenaElo: "Arena Elo",
     mmluPro: "MMLU-Pro",

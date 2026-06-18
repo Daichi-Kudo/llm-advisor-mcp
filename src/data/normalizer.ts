@@ -37,11 +37,28 @@ export function normalizeKey(name: string): string {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
 
-  // Convert version-number hyphens to dots: "4-6" → "4.6", "3-1" → "3.1"
-  // But only for version-like patterns (digit-digit at end or before known suffix)
-  key = key.replace(/(\d+)-(\d+)(?=$|-(?:pro|flash|opus|sonnet|plus|max|mini))/g, "$1.$2");
+  // Convert version-number hyphens to dots: "4-6" → "4.6", "3-1" → "3.1".
+  // Match before any textual variant suffix, not just a small allowlist, so
+  // "claude-3-5-haiku", "gpt-4-1-mini", and "gemini-2-5-flash" align with
+  // benchmark names that spell the same versions with dots.
+  key = key.replace(/(\d+)-(\d+)(?=$|-[a-z][a-z0-9]*)/g, "$1.$2");
 
   return key;
+}
+
+/**
+ * Normalize upstream benchmark names for Map indexing before richer matching.
+ * This intentionally avoids provider/date/version heuristics so fetchers all
+ * store keys with the same minimal punctuation and whitespace normalization.
+ */
+export function normalizeForIndex(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[()]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9.\-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 /**
@@ -79,6 +96,11 @@ export function buildKeyToId(
 ): Map<string, string> {
   const keyToId = new Map<string, string>();
   for (const [id, model] of models) {
+    const indexedId = normalizeForIndex(id);
+    if (!keyToId.has(indexedId)) keyToId.set(indexedId, id);
+    const indexedName = normalizeForIndex(model.name);
+    if (!keyToId.has(indexedName)) keyToId.set(indexedName, id);
+
     for (const key of generateMatchKeys(id)) {
       if (!keyToId.has(key)) keyToId.set(key, id);
     }

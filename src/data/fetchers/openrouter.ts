@@ -83,6 +83,7 @@ function transformModel(raw: OpenRouterResponse["data"][0]): UnifiedModel {
     pricing: {
       input: inputPrice,
       output: outputPrice,
+      request: normalizeOptionalPositiveNumber(raw.pricing.request),
       cacheRead: perTokenToPerMillion(raw.pricing.input_cache_read),
       cacheWrite: perTokenToPerMillion(raw.pricing.input_cache_write),
       image: perTokenToPerMillion(raw.pricing.image),
@@ -91,9 +92,9 @@ function transformModel(raw: OpenRouterResponse["data"][0]): UnifiedModel {
     benchmarks: {},
     capabilities: {
       contextLength: normalizePositiveNumber(raw.context_length),
-      maxOutputTokens: normalizeOptionalPositiveNumber(raw.top_provider.max_completion_tokens),
-      inputModalities: raw.architecture.input_modalities ?? ["text"],
-      outputModalities: raw.architecture.output_modalities ?? ["text"],
+      maxOutputTokens: normalizeOptionalPositiveNumber(raw.top_provider?.max_completion_tokens),
+      inputModalities: raw.architecture?.input_modalities ?? ["text"],
+      outputModalities: raw.architecture?.output_modalities ?? ["text"],
       supportsTools: raw.supported_parameters?.includes("tools") ?? false,
       supportsStreaming: true,
       supportsReasoning: raw.supported_parameters?.includes("reasoning") ?? false,
@@ -112,8 +113,7 @@ function transformModel(raw: OpenRouterResponse["data"][0]): UnifiedModel {
 }
 
 function normalizePositiveNumber(value: unknown): number {
-  const n = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(n) && n > 0 ? n : 0;
+  return normalizeOptionalPositiveNumber(value) ?? 0;
 }
 
 function normalizeOptionalPositiveNumber(value: unknown): number | undefined {

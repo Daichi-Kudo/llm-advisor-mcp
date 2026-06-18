@@ -321,7 +321,7 @@ MCPツールの応答はLLMのコンテキストウィンドウを消費する�
 | v0.1 | `get_model_info` + `list_top_models`（OpenRouterのみ） |
 | v0.2 | `compare_models` + `recommend_model` + SWE-bench + Arena Elo統合 |
 | v0.3 | VLMベンチマーク（MMMU, MMBench, OCRBench, AI2D, MathVista）+ Aider Polyglot + パーセンタイルランク + 43テスト |
-| **v0.4**（現在）| リリース日フィルタ・鮮度スコアリング・複合ベンチマークスコア・MCPツール注釈・smoke-testゲート + 67テスト |
+| **v0.4**（現在）| リリース日フィルタ・鮮度スコアリング・複合ベンチマークスコア・MCPツール注釈・smoke-testゲート + 92テスト |
 | v1.0 | コミュニティ貢献、GitHub Actionsによる週次静的データ更新 |
 
 ---
@@ -345,7 +345,7 @@ npm install
 ```bash
 npm run build          # TypeScriptコンパイル（tsup）
 npm run dev            # 開発用サーバー起動（tsx）
-npm test               # テスト実行（vitest, 67テスト）
+npm test               # テスト実行（vitest, 92テスト）
 npm run test:watch     # テストウォッチモード
 ```
 

@@ -87,8 +87,10 @@ export async function fetchSweBenchScores(
  * "live-SWE-agent + Gemini 3 Pro Preview (2025-11-18)" → "Gemini 3 Pro Preview"
  * "TRAE + Doubao-Seed-Code" → "Doubao-Seed-Code"
  * "Atlassian Rovo Dev (2025-09-02)" → null (no clear model name)
+ *
+ * @internal Exported for parser regression tests only; not part of the public MCP API.
  */
-function extractModelName(entryName: string): string | null {
+export function extractModelName(entryName: string): string | null {
   // Pattern: "Agent + Model (qualifier)" — extract after "+"
   const plusMatch = entryName.match(/\+\s*(.+)/);
   if (plusMatch) {

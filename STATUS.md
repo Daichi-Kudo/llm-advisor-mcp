@@ -4,7 +4,7 @@
 
 ## Current Version
 
-**v0.4.5** — live on npm + MCP Registry (latest). Traction: ~237 DL/last-30d, ~68/last-7d, slowly rising.
+**v0.4.5** — live on npm + MCP Registry (latest).
 
 ## What This Is
 
@@ -12,7 +12,7 @@ MCP server giving AI assistants real-time LLM/VLM knowledge — pricing, benchma
 
 ## Architecture
 
-- TypeScript + ESM, `tsup` build, `vitest` (67 tests)
+- TypeScript + ESM, `tsup` build, `vitest` (92 tests)
 - 4 tools: `get_model_info`, `list_top_models`, `compare_models`, `recommend_model`
 - 5 fetchers: OpenRouter, SWE-bench, LM Arena, OpenCompass VLM, Aider Polyglot
 - In-memory TTL cache (1h pricing, 6h benchmarks); cross-source name normalization + composite benchmark scoring + percentile ranks
