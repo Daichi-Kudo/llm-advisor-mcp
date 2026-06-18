@@ -6,7 +6,7 @@ const API_URL =
   "https://raw.githubusercontent.com/SWE-bench/swe-bench.github.io/master/data/leaderboards.json";
 const CACHE_KEY = "swebench:verified";
 const TTL = 6 * 60 * 60 * 1000; // 6 hours
-const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
+const MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
 const MAX_STALE_MS = 24 * 60 * 60 * 1000;
 
 export interface SweBenchEntry {
