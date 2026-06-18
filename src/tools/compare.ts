@@ -5,6 +5,7 @@ import type { UnifiedModel } from "../types.js";
 import { fmtPrice, fmtContext, fmtScore, fmtElo, freshnessFooter, escapeMarkdownCell, escapeMarkdownInline, escapeMarkdownTableInline } from "./formatters.js";
 import { getCompositeBenchmarkScore } from "../data/percentiles.js";
 import { MCP_REGISTRY_NAME, SERVER_VERSION } from "../metadata.js";
+import { ensureRegistryLoaded } from "./schemas.js";
 
 export function registerCompareTool(
   server: McpServer,
@@ -34,7 +35,8 @@ export function registerCompareTool(
       },
     },
     async ({ models: modelQueries }) => {
-      await registry.ensureLoaded();
+      const loadError = await ensureRegistryLoaded(registry);
+      if (loadError) return loadError;
 
       const resolved: UnifiedModel[] = [];
       const notFound: string[] = [];

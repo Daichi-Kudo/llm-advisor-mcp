@@ -20,6 +20,8 @@ describe("normalizeKey", () => {
   it("strips date suffixes", () => {
     expect(normalizeKey("gpt-5.2-20260210")).toBe("gpt-5.2");
     expect(normalizeKey("claude-sonnet-4-2025-11-18")).toBe("claude-sonnet-4");
+    expect(normalizeKey("gpt-4-2024")).toBe("gpt-4");
+    expect(normalizeKey("command-r-12-2024")).toBe("command-r");
   });
 
   it("normalizes hyphens to dots for version numbers", () => {

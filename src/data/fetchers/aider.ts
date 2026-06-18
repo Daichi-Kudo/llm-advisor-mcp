@@ -46,6 +46,9 @@ export async function fetchAiderScores(
 
     const text = await response.text();
     const entries = parseSimpleYamlList(text);
+    if (entries.length === 0) {
+      throw new Error("Aider leaderboard parser returned no entries");
+    }
     const scores = new Map<string, AiderEntry>();
 
     for (const entry of entries) {
@@ -67,6 +70,10 @@ export async function fetchAiderScores(
         totalCost: safeParseFloat(entry.total_cost),
         editFormat: entry.edit_format || undefined,
       });
+    }
+
+    if (scores.size === 0) {
+      throw new Error("Aider leaderboard returned no usable model scores");
     }
 
     cache.set(CACHE_KEY, scores, TTL, "aider");

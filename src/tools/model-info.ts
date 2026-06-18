@@ -4,6 +4,7 @@ import type { ModelRegistry } from "../data/registry.js";
 import { escapeMarkdownInline, formatModelDetail } from "./formatters.js";
 import { getApiExample } from "../data/static/api-examples.js";
 import { MCP_REGISTRY_NAME, SERVER_VERSION } from "../metadata.js";
+import { ensureRegistryLoaded } from "./schemas.js";
 
 export function registerModelInfoTool(
   server: McpServer,
@@ -27,6 +28,7 @@ export function registerModelInfoTool(
           .string()
           .trim()
           .min(1)
+          .max(500)
           .describe(
             'Model ID or partial name (e.g., "anthropic/claude-sonnet-4.6", "gpt-5.1", "gemini")'
           ),
@@ -41,7 +43,8 @@ export function registerModelInfoTool(
       },
     },
     async ({ model, include_api_example, api_format }) => {
-      await registry.ensureLoaded();
+      const loadError = await ensureRegistryLoaded(registry);
+      if (loadError) return loadError;
 
       const found = registry.getModel(model);
 

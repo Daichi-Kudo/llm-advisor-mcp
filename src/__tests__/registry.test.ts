@@ -111,6 +111,15 @@ describe("ModelRegistry.getTopModels", () => {
 });
 
 describe("modelMatchesFilters", () => {
+  it("does not suggest unrelated models for one-character queries", () => {
+    const registry = makeRegistry([
+      makeModel("openai/gpt-5.1"),
+      makeModel("google/gemini-3-pro"),
+    ]);
+
+    expect(registry.findSimilar("g")).toEqual([]);
+  });
+
   it("applies shared recommendation and top-list filters", () => {
     const model = makeModel("candidate", {
       pricing: { input: 2, output: 5 },

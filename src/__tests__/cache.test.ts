@@ -40,7 +40,7 @@ describe("InMemoryCache", () => {
     vi.restoreAllMocks();
   });
 
-  it("removes expired entries from get", () => {
+  it("preserves expired entries so callers can still serve stale fallback data", () => {
     const cache = new InMemoryCache();
     const now = 1_700_000_000_000;
     vi.spyOn(Date, "now").mockReturnValue(now);
@@ -49,7 +49,8 @@ describe("InMemoryCache", () => {
     vi.mocked(Date.now).mockReturnValue(now + 2_000);
 
     expect(cache.get("models")).toBeNull();
-    expect(cache.getFreshnessInfo("models")).toBeNull();
+    expect(cache.getFreshnessInfo("models")).toEqual({ fetchedAt: now, ttl: 1_000 });
+    expect(cache.getStaleOrNull("models")?.stale).toBe(true);
 
     vi.restoreAllMocks();
   });

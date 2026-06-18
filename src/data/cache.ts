@@ -7,7 +7,6 @@ export class InMemoryCache {
     const entry = this.store.get(key);
     if (!entry) return null;
     if (Date.now() - entry.fetchedAt > entry.ttl) {
-      this.store.delete(key);
       return null;
     }
     return cloneCachedData(entry.data) as T;

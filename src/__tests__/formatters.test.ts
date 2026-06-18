@@ -15,6 +15,10 @@ describe("fmtPrice", () => {
   it("formats zero as 'free'", () => expect(fmtPrice(0)).toBe("free"));
   it("formats undefined as 'n/a'", () => expect(fmtPrice(undefined)).toBe("n/a"));
   it("formats null as 'n/a'", () => expect(fmtPrice(null as unknown as undefined)).toBe("n/a"));
+  it("formats non-finite prices as 'n/a'", () => {
+    expect(fmtPrice(NaN)).toBe("n/a");
+    expect(fmtPrice(Infinity)).toBe("n/a");
+  });
   it("does not round very small non-zero prices to free-looking zeroes", () => expect(fmtPrice(0.00003)).toBe("$0.00003"));
   it("formats tiny prices without misleading trailing zeroes", () => {
     expect(fmtPrice(0.00001)).toBe("$0.00001");

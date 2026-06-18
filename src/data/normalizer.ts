@@ -22,6 +22,8 @@ export function normalizeKey(name: string): string {
     .replace(/^[a-z0-9_-]+\//, "")
     // Strip date suffixes: -20251101, -2025-11-18, (20251101)
     .replace(/[-\s]?\(?20\d{2}-?\d{2}-?\d{2}\)?/g, "")
+    // Strip trailing year or month-year suffixes before version normalization.
+    .replace(/[-\s]?\(?(?:(?:0[1-9]|1[0-2])-)?20\d{2}\)?$/g, "")
     // Strip thinking/reasoning suffixes for base model matching
     .replace(/-thinking(?:-\d+k)?$/, "")
     // Strip common variant suffixes

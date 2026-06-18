@@ -9,7 +9,7 @@ import {
   getOverallBenchmarkScore,
 } from "../data/percentiles.js";
 import { MCP_REGISTRY_NAME, SERVER_VERSION } from "../metadata.js";
-import { isoDateSchema } from "./schemas.js";
+import { ensureRegistryLoaded, isoDateSchema } from "./schemas.js";
 
 export function registerRecommendTool(
   server: McpServer,
@@ -73,7 +73,8 @@ export function registerRecommendTool(
       require_open_source,
       min_release_date,
     }) => {
-      await registry.ensureLoaded();
+      const loadError = await ensureRegistryLoaded(registry);
+      if (loadError) return loadError;
 
       const candidates = registry.getAllModels().filter((m) =>
         modelMatchesFilters(m, {

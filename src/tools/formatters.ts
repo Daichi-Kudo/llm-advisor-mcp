@@ -35,7 +35,7 @@ export function escapeMarkdownInline(value: string): string {
 
 /** Format price as "$X.XX" or "free" */
 export function fmtPrice(price: number | undefined): string {
-  if (price === undefined || price === null) return "n/a";
+  if (price === undefined || price === null || !Number.isFinite(price)) return "n/a";
   if (price === 0) return "free";
   if (price < 0.0001) return `$${price.toPrecision(3).replace(/(\.\d*?[1-9])0+(?=$|e)/, "$1").replace(/\.0+(?=$|e)/, "")}`;
   if (price < 0.01) return `$${price.toFixed(4)}`;
@@ -178,7 +178,7 @@ export function formatTopList(
   const headers = ["#", "Model", "Key Score", "Input $/1M", "Output $/1M", "Context", "Released"];
   const rows = models.slice(0, limit).map((m, i) => [
     String(i + 1),
-    m.id,
+    escapeMarkdownTableInline(m.id),
     keyScoreExtractor(m),
     fmtPrice(m.pricing.input),
     fmtPrice(m.pricing.output),

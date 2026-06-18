@@ -4,7 +4,9 @@
   "mcpName": "io.github.Daichi-Kudo/llm-advisor",
   "description": "MCP server for LLM/VLM model selection — compare 300+ models with real-time benchmarks, pricing, and personalized recommendations. No API key required.",
   "type": "module",
+  "main": "dist/index.js",
   "exports": {
+    ".": "./dist/index.js",
     "./package.json": "./package.json"
   },
   "bin": {

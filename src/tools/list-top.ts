@@ -4,7 +4,7 @@ import type { ModelRegistry } from "../data/registry.js";
 import { MODEL_CATEGORIES, type UnifiedModel, type ModelCategory } from "../types.js";
 import { formatTopList, fmtScore, fmtElo, fmtContext, fmtPrice } from "./formatters.js";
 import { MCP_REGISTRY_NAME, SERVER_VERSION } from "../metadata.js";
-import { isoDateSchema } from "./schemas.js";
+import { ensureRegistryLoaded, isoDateSchema } from "./schemas.js";
 import {
   getBlendedTokenPrice,
   getCompositeBenchmarkScore,
@@ -51,7 +51,8 @@ export function registerListTopTool(
       },
     },
     async ({ category, limit, min_context, min_release_date }) => {
-      await registry.ensureLoaded();
+      const loadError = await ensureRegistryLoaded(registry);
+      if (loadError) return loadError;
 
       const effectiveLimit = limit ?? 10;
       const models = registry.getTopModels(category, effectiveLimit, {

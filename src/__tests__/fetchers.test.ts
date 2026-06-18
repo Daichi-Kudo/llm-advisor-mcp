@@ -39,10 +39,10 @@ describe("Aider helpers", () => {
 });
 
 describe("VLM helpers", () => {
-  it("extracts positive numeric scores from numbers and strings", () => {
+  it("extracts non-negative numeric scores from numbers and strings", () => {
     expect(extractScore({ Overall: 75.2 }, "Overall")).toBe(75.2);
     expect(extractScore({ "Final Score": "80.5" }, "Final Score")).toBe(80.5);
-    expect(extractScore({ Overall: 0 }, "Overall")).toBeUndefined();
+    expect(extractScore({ Overall: 0 }, "Overall")).toBe(0);
     expect(extractScore(null, "Overall")).toBeUndefined();
   });
 

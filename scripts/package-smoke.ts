@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,7 +28,8 @@ async function main(): Promise<void> {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "inherit"],
   });
-  const [{ filename }] = JSON.parse(packJson) as Array<{ filename: string }>;
+  const packResult = JSON.parse(packJson) as { filename: string } | Array<{ filename: string }>;
+  const [{ filename }] = Array.isArray(packResult) ? packResult : [packResult];
   const tarball = join(projectRoot, filename);
   const installDir = mkdtempSync(join(tmpdir(), "llm-advisor-mcp-pack-"));
 
@@ -39,6 +40,16 @@ async function main(): Promise<void> {
     });
 
     const bin = join(installDir, "node_modules", ".bin", "llm-advisor-mcp");
+    const installedPackageJson = JSON.parse(
+      readFileSync(join(installDir, "node_modules", "llm-advisor-mcp", "package.json"), "utf8")
+    ) as { main?: string; exports?: Record<string, unknown> };
+    if (installedPackageJson.main !== "dist/index.js") {
+      throw new Error(`Unexpected package main: ${installedPackageJson.main ?? "missing"}`);
+    }
+    if (installedPackageJson.exports?.["."] !== "./dist/index.js") {
+      throw new Error("Package root export should point at ./dist/index.js");
+    }
+
     const client = new Client({ name: "llm-advisor-package-smoke", version: "0.0.0" });
     const transport = new StdioClientTransport({ command: bin, stderr: "pipe" });
     let stderr = "";

@@ -38,7 +38,9 @@ async function assertToolValidationFails(
 }
 
 async function main(): Promise<void> {
-  execFileSync("npm", ["run", "build"], { stdio: "inherit" });
+  if (!process.env.SKIP_BUILD) {
+    execFileSync("npm", ["run", "build"], { stdio: "inherit" });
+  }
   assert(existsSync(DIST_ENTRY), `${DIST_ENTRY} does not exist. Run npm run build first.`);
 
   const client = new Client({ name: "llm-advisor-mcp-smoke", version: "0.0.0" });

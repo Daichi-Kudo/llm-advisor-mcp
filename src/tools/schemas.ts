@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ModelRegistry } from "../data/registry.js";
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -10,3 +11,24 @@ export const isoDateSchema = z
     const date = new Date(`${value}T00:00:00.000Z`);
     return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
   }, "Expected a valid calendar date in YYYY-MM-DD format");
+
+export async function ensureRegistryLoaded(registry: ModelRegistry): Promise<{
+  content: [{ type: "text"; text: string }];
+  isError: true;
+} | null> {
+  try {
+    await registry.ensureLoaded();
+    return null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Model data is temporarily unavailable. ${message}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+}

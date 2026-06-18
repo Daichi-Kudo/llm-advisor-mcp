@@ -49,9 +49,9 @@ export class ModelRegistry {
     }
     this.warmupPromise = this._loadData()
       .then(() => {
-        this.ready = true;
         this.lastLoadFailureAt = null;
         this.lastLoadError = undefined;
+        this.ready = true;
       })
       .catch((error) => {
         this.ready = false;
@@ -137,6 +137,7 @@ export class ModelRegistry {
   /** Find similar model names for suggestions */
   findSimilar(query: string, limit = 5): string[] {
     const queryLower = query.toLowerCase();
+    if (queryLower.length < 2) return [];
     const prefix = queryLower.slice(0, Math.min(4, queryLower.length));
     return Array.from(this.models.values())
       .filter(

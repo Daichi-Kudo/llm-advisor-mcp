@@ -35,13 +35,13 @@ export async function fetchOpenRouterModels(
     }
     const models = data.data
       .filter((m) => {
-        // Exclude free models (both prices "0")
-        if (m.pricing.prompt === "0" && m.pricing.completion === "0") return false;
+        const prompt = parseFloat(m.pricing.prompt ?? "0");
+        const completion = parseFloat(m.pricing.completion ?? "0");
+        // Exclude free models (both prices 0), accepting either string or numeric upstream shapes.
+        if (prompt === 0 && completion === 0) return false;
         // Exclude OpenRouter meta-models (virtual routing models with negative/invalid pricing)
         if (m.id.startsWith("openrouter/")) return false;
         // Exclude models with negative pricing
-        const prompt = parseFloat(m.pricing.prompt ?? "0");
-        const completion = parseFloat(m.pricing.completion ?? "0");
         if (prompt < 0 || completion < 0) return false;
         return true;
       })
@@ -65,7 +65,7 @@ function transformModel(raw: OpenRouterResponse["data"][0]): UnifiedModel {
   const perTokenToPerMillion = (s: string | undefined): number | undefined => {
     if (!s || s === "0") return undefined;
     const n = parseFloat(s.replace(/,/g, ""));
-    return isNaN(n) ? undefined : n * 1_000_000;
+    return Number.isFinite(n) ? n * 1_000_000 : undefined;
   };
 
   const inputPrice = perTokenToPerMillion(raw.pricing.prompt) ?? 0;

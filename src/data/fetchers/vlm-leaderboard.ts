@@ -134,10 +134,10 @@ export function extractScore(
   if (!benchData || typeof benchData !== "object") return undefined;
   const obj = benchData as Record<string, unknown>;
   const val = obj[scoreKey];
-  if (typeof val === "number" && val > 0) return val;
+  if (typeof val === "number" && val >= 0) return val;
   if (typeof val === "string") {
     const parsed = parseFloat(val);
-    if (!isNaN(parsed) && parsed > 0) return parsed;
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
   }
   return undefined;
 }
