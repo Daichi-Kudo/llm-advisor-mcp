@@ -8,10 +8,16 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { SERVER_NAME } from "../src/metadata.js";
 
 const EXPECTED_TOOLS = [
-  "get_model_info",
-  "list_top_models",
   "compare_models",
+  "compare_providers",
+  "estimate_cost",
+  "get_model_info",
+  "list_new_models",
+  "list_providers",
+  "list_model_slugs",
+  "list_top_models",
   "recommend_model",
+  "search_models",
 ] as const;
 const MAX_STDERR_CHARS = 2_000;
 
@@ -45,11 +51,13 @@ async function main(): Promise<void> {
     const installedPackageJson = JSON.parse(
       readFileSync(join(installedPackageRoot, "package.json"), "utf8")
     ) as { main?: string; exports?: Record<string, unknown> };
-    if (installedPackageJson.main !== "dist/index.js") {
-      throw new Error(`Unexpected package main: ${installedPackageJson.main ?? "missing"}`);
+    // The package root is intentionally non-importable (no "main" or "." export)
+    // to prevent import side effects. Only the bin entry point should be used.
+    if (installedPackageJson.main !== undefined) {
+      throw new Error(`Expected no package main (non-importable), got: ${installedPackageJson.main}`);
     }
-    if (installedPackageJson.exports?.["."] !== "./dist/index.js") {
-      throw new Error("Package root export should point at ./dist/index.js");
+    if (installedPackageJson.exports?.["."] !== undefined) {
+      throw new Error("Expected no package root export (non-importable), got root export");
     }
     if (!existsSync(join(installedPackageRoot, "server.json"))) {
       throw new Error("Packed package is missing server.json for MCP Registry discovery");
