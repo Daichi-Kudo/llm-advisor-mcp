@@ -56,8 +56,9 @@ const KNOWN_SLUGS: ProviderSlug[] = [
  * Generate provider slugs for ANY model using naming heuristics.
  * This is the key to auto-detecting new models — every model gets
  * estimated slug data even without an explicit mapping.
+ * @internal Exported for testing.
  */
-function generateSlug(modelId: string): ProviderSlug {
+export function generateSlug(modelId: string): ProviderSlug {
   const displayName = modelId.split("/").pop() ?? modelId;
   const [provider, ...rest] = modelId.split("/");
   const modelName = rest.join("-");
