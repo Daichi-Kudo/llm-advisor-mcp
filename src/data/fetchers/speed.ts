@@ -47,7 +47,6 @@ const MEASURED_SPEED_DATA: SpeedEntry[] = [
 
   // DeepSeek
   { name: "deepseek/deepseek-chat", outputTokensPerSecond: 180, timeToFirstToken: 1.2 },
-  { name: "deepseek/deepseek-v3", outputTokensPerSecond: 3871, timeToFirstToken: 1.5 },
   { name: "deepseek/deepseek-r1", outputTokensPerSecond: 60, timeToFirstToken: 8.0 },
   { name: "deepseek/deepseek-v4-pro", outputTokensPerSecond: 160, timeToFirstToken: 1.0 },
   { name: "deepseek/deepseek-v4-flash", outputTokensPerSecond: 320, timeToFirstToken: 0.5 },

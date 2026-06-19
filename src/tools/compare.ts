@@ -135,6 +135,9 @@ function formatComparison(
     ["OCRBench", (m) => fmtScore(m.benchmarks.ocrBench)],
     ["AI2D", (m) => fmtScore(m.benchmarks.ai2d)],
     ["MathVista", (m) => fmtScore(m.benchmarks.mathVista)],
+    ["BFCL V4", (m) => fmtScore(m.benchmarks.bfclV4Overall)],
+    ["Output Speed", (m) => m.benchmarks.outputTokensPerSecond !== undefined ? `${m.benchmarks.outputTokensPerSecond} tok/s` : "n/a"],
+    ["TTFT", (m) => m.benchmarks.timeToFirstToken !== undefined ? `${m.benchmarks.timeToFirstToken.toFixed(2)}s` : "n/a"],
   ];
 
   for (const [label, extractor] of benchmarks) {

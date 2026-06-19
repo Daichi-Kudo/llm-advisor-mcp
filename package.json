@@ -45,7 +45,15 @@
     "opencompass",
     "arena-elo",
     "openrouter",
-    "claude-code"
+    "claude-code",
+    "agentic",
+    "bfcl",
+    "speed",
+    "latency",
+    "http",
+    "mcp-http",
+    "cost-calculator",
+    "model-search"
   ],
   "homepage": "https://github.com/Daichi-Kudo/llm-advisor-mcp",
   "repository": {

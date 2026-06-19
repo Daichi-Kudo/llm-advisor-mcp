@@ -123,16 +123,6 @@ export interface PercentileRanks {
   agentic?: number;
 }
 
-/** Cost estimate for common usage patterns */
-export interface CostEstimate {
-  /** Cost for 10K input + 2K output tokens (typical prompt) */
-  typicalCall: number;
-  /** Cost for 100K input + 10K output tokens (large document) */
-  largeCall: number;
-  /** Monthly cost at 1000 typical calls per day */
-  monthlyActive: number;
-}
-
 export interface UnifiedModel {
   /** OpenRouter canonical ID (e.g. "anthropic/claude-sonnet-4.6") */
   id: string;

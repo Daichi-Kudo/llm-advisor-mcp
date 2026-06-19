@@ -250,6 +250,9 @@ function formatRecommendations(
     if (model.benchmarks.mmmu !== undefined) {
       benchParts.push(`MMMU: ${fmtScore(model.benchmarks.mmmu)}`);
     }
+    if (model.benchmarks.bfclV4Overall !== undefined) {
+      benchParts.push(`BFCL: ${fmtScore(model.benchmarks.bfclV4Overall)}`);
+    }
     if (benchParts.length > 0) {
       lines.push(`Benchmarks: ${benchParts.join(", ")}`);
     }

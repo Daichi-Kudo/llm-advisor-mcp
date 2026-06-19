@@ -180,20 +180,6 @@ export function formatModelDetail(model: UnifiedModel, fetchedAt?: number): stri
     lines.push(`**Capabilities**: ${caps.join(", ")}`);
   }
 
-  // Speed data (if available)
-  if (model.speed.outputTokensPerSecond !== undefined || model.speed.timeToFirstToken !== undefined) {
-    lines.push("");
-    lines.push("### Speed");
-    lines.push("| Metric | Value |");
-    lines.push("|--------|-------|");
-    if (model.speed.outputTokensPerSecond !== undefined) {
-      lines.push(`| Output Speed | ${model.speed.outputTokensPerSecond} tok/s |`);
-    }
-    if (model.speed.timeToFirstToken !== undefined) {
-      lines.push(`| Time to First Token | ${model.speed.timeToFirstToken.toFixed(2)}s |`);
-    }
-  }
-
   lines.push(freshnessFooter(fetchedAt));
 
   return lines.join("\n");
