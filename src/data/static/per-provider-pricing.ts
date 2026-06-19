@@ -190,6 +190,8 @@ export function getProviderDisplayName(provider: string): string {
     deepinfra: "DeepInfra",
     cerebras: "Cerebras",
     sambanova: "SambaNova",
+    vertex: "Vertex AI",
+    replicate: "Replicate",
   };
   return names[provider] ?? provider;
 }

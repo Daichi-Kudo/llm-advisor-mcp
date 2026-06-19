@@ -17,6 +17,7 @@ export interface ProviderSlug {
   model: string;
   openrouter: string;
   bedrock?: string;
+  vertexAi?: string;
   groq?: string;
   together?: string;
   fireworks?: string;
@@ -25,6 +26,8 @@ export interface ProviderSlug {
   sambanova?: string;
   google?: string;
   azure?: string;
+  replicate?: string;
+  huggingface?: string;
 }
 
 export type ProviderKey = keyof Omit<ProviderSlug, "model" | "openrouter">;
@@ -34,15 +37,18 @@ export type ProviderKey = keyof Omit<ProviderSlug, "model" | "openrouter">;
  * Models whose slugs follow standard patterns are auto-generated below.
  */
 const KNOWN_SLUGS: ProviderSlug[] = [
-  { model: "Claude Opus 4.8", openrouter: "anthropic/claude-opus-4.8", bedrock: "anthropic.claude-opus-4-8-20250522" },
-  { model: "Claude Sonnet 4.6", openrouter: "anthropic/claude-sonnet-4.6", bedrock: "anthropic.claude-sonnet-4-6-20250522" },
-  { model: "Claude Haiku 4.5", openrouter: "anthropic/claude-haiku-4.5", bedrock: "anthropic.claude-haiku-4-5-20250522" },
+  { model: "Claude Opus 4.8", openrouter: "anthropic/claude-opus-4.8", bedrock: "anthropic.claude-opus-4-8-20250522", vertexAi: "claude-opus-4-8@20250522" },
+  { model: "Claude Sonnet 4.6", openrouter: "anthropic/claude-sonnet-4.6", bedrock: "anthropic.claude-sonnet-4-6-20250522", vertexAi: "claude-sonnet-4-6@20250522" },
+  { model: "Claude Haiku 4.5", openrouter: "anthropic/claude-haiku-4.5", bedrock: "anthropic.claude-haiku-4-5-20250522", vertexAi: "claude-haiku-4-5@20250522" },
   { model: "GPT-5.5", openrouter: "openai/gpt-5.5", azure: "gpt-5-5" },
   { model: "GPT-4.1", openrouter: "openai/gpt-4.1", bedrock: "openai.gpt-4-1", azure: "gpt-4-1" },
-  { model: "Gemini 3.1 Pro", openrouter: "google/gemini-3.1-pro", google: "gemini-3.1-pro", groq: "gemini-3.1-pro" },
+  { model: "Gemini 3.1 Pro", openrouter: "google/gemini-3.1-pro", google: "gemini-3.1-pro", groq: "gemini-3.1-pro", vertexAi: "gemini-3.1-pro" },
+  { model: "Gemini 3 Flash", openrouter: "google/gemini-3-flash", google: "gemini-3-flash", vertexAi: "gemini-3-flash" },
+  { model: "Gemini 2.5 Pro", openrouter: "google/gemini-2.5-pro", google: "gemini-2.5-pro", vertexAi: "gemini-2.5-pro" },
+  { model: "Gemini 2.5 Flash", openrouter: "google/gemini-2.5-flash", google: "gemini-2.5-flash", vertexAi: "gemini-2.5-flash" },
   { model: "DeepSeek V4 Pro", openrouter: "deepseek/deepseek-v4-pro", fireworks: "deepseek-v4-pro", together: "deepseek-ai/DeepSeek-V4-Pro" },
   { model: "DeepSeek V4 Flash", openrouter: "deepseek/deepseek-v4-flash", deepinfra: "DeepSeek-V4-Flash", fireworks: "deepseek-v4-flash" },
-  { model: "Llama 4 Maverick", openrouter: "meta-llama/llama-4-maverick", groq: "llama-4-maverick", together: "meta-llama/Llama-4-Maverick-17B-128E-Instruct", fireworks: "llama-v4-maverick" },
+  { model: "Llama 4 Maverick", openrouter: "meta-llama/llama-4-maverick", groq: "llama-4-maverick", together: "meta-llama/Llama-4-Maverick-17B-128E-Instruct", fireworks: "llama-v4-maverick", vertexAi: "llama-4-maverick" },
   { model: "Llama 4 Scout", openrouter: "meta-llama/llama-4-scout", groq: "llama-4-scout", together: "meta-llama/Llama-4-Scout-17B-16E-Instruct" },
 ];
 
@@ -82,6 +88,20 @@ function generateSlug(modelId: string): ProviderSlug {
   // DeepInfra: Model-Name
   slug.deepinfra = toTitleCase(modelName);
 
+  // Vertex AI: provider-prefixed model name with @version format
+  const cleanName = modelName.replace(/-20\d{6}/g, "").replace(/-latest$/, "").replace(/-thinking.*$/, "");
+  if (["anthropic", "google", "meta-llama", "mistralai"].includes(provider)) {
+    slug.vertexAi = provider === "google"
+      ? cleanName
+      : `${cleanName}`;
+  }
+
+  // Replicate: owner/model-name (lowercase)
+  slug.replicate = `${provider}/${modelName.replace(/-20\d{6}/g, "").replace(/-thinking.*$/, "").toLowerCase()}`;
+
+  // HuggingFace: provider/model-name
+  slug.huggingface = `${provider}/${cleanName}`;
+
   // Google AI Studio: model-name
   if (provider === "google") slug.google = modelName;
 
@@ -116,8 +136,8 @@ function getAllSlugs(allModelIds: string[]): ProviderSlug[] {
 }
 
 const ALL_PROVIDER_KEYS: ProviderKey[] = [
-  "bedrock", "groq", "together", "fireworks", "deepinfra",
-  "cerebras", "sambanova", "google", "azure",
+  "bedrock", "vertexAi", "groq", "together", "fireworks", "deepinfra",
+  "cerebras", "sambanova", "google", "azure", "replicate", "huggingface",
 ];
 
 export function registerSlugsTool(
