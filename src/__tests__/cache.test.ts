@@ -1,5 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { InMemoryCache } from "../data/cache.js";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe("InMemoryCache", () => {
   it("rejects non-positive and non-finite TTL values", () => {
@@ -54,8 +58,6 @@ describe("InMemoryCache", () => {
 
     expect(stale?.stale).toBe(true);
     expect(cache.getStaleOrNull<Map<string, { score: number }>>("models")?.data.get("model")?.score).toBe(1);
-
-    vi.restoreAllMocks();
   });
 
   it("preserves expired entries so callers can still serve stale fallback data", () => {
@@ -69,8 +71,6 @@ describe("InMemoryCache", () => {
     expect(cache.get("models")).toBeNull();
     expect(cache.getFreshnessInfo("models")).toEqual({ fetchedAt: now, ttl: 1_000 });
     expect(cache.getStaleOrNull("models")?.stale).toBe(true);
-
-    vi.restoreAllMocks();
   });
 
   it("can cap stale fallback age without deleting cached freshness metadata", () => {
@@ -83,8 +83,6 @@ describe("InMemoryCache", () => {
 
     expect(cache.getStaleOrNull("models", 5_000)).toBeNull();
     expect(cache.getFreshnessInfo("models")).toEqual({ fetchedAt: now, ttl: 1_000 });
-
-    vi.restoreAllMocks();
   });
 
   it("rejects invalid max stale ages", () => {
@@ -107,8 +105,6 @@ describe("InMemoryCache", () => {
 
     vi.mocked(Date.now).mockReturnValue(now + 5_000);
     expect(cache.getStaleOrNull("models", 5_000)).not.toBeNull();
-
-    vi.restoreAllMocks();
   });
 
   it("returns null freshness info for missing keys", () => {
@@ -130,7 +126,5 @@ describe("InMemoryCache", () => {
       fetchedAt: now - 10_000,
       ttl: 60_000,
     });
-
-    vi.restoreAllMocks();
   });
 });

@@ -21,17 +21,22 @@ export async function readResponseText(
   const chunks: Uint8Array[] = [];
   let total = 0;
 
+  let overflow = false;
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       total += value.byteLength;
       if (total > maxBytes) {
+        overflow = true;
         throw new Error(`${label} response exceeded ${maxBytes} bytes`);
       }
       chunks.push(value);
     }
   } finally {
+    if (overflow) {
+      try { await reader.cancel(); } catch { /* ignore cancellation error */ }
+    }
     reader.releaseLock();
   }
 

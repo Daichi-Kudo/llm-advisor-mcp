@@ -2,25 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
-
-### Fixed
-- Corrected ranking/filtering edge cases: filters now apply before limiting, open-source classification no longer labels proprietary Gemini models as open-source, benchmark/context formatting preserves explicit zero values, and model ordering is deterministic for equal scores.
-- Standardized cost-performance scoring on a single blended token-price formula across list and recommendation tools.
-- Hardened MCP tool protocol handling with strict calendar-date validation, non-empty model-query schemas, escaped external Markdown fields, and a package override for the dev-only `esbuild` audit advisory.
-- Fixed distribution hygiene by keeping the package root non-importable, removing CLI-only declaration output, validating built package artifacts before pack smoke tests, and relying on the `files` allowlist instead of `.npmignore`.
-- Fixed package safety gates so builds run `tsc --noEmit`, publishes run tests before bundling, npm engine requirements include the lockfile-compatible npm floor, Docker installs CA certificates explicitly, and Grok 1.5 is no longer classified as open-source.
-
-### Changed
-- Migrated tool registration to `registerTool` with read-only/idempotent MCP annotations and versioned descriptions for better client compatibility.
-- Raised the published MCP SDK dependency floor to `^1.29.0` to match the lockfile and modern `registerTool` API usage.
-- Limited live data-source smoke checks to push builds so pull requests still verify MCP/package protocol behavior without being blocked by upstream outages.
+## [0.5.0] - 2026-06-19
 
 ### Added
-- Added regression tests for filtering, cache cloning/freshness, fetcher parser helpers, registry mutation isolation, formatting/schema edge cases, and MCP metadata.
-- Added coverage for HTTP response byte limits, registry top-model clone isolation, negative price formatting, Grok open-source classification, cache boundary behavior, and MCP registry metadata constraints.
-- Added `npm run smoke:mcp` for a stdio MCP client smoke test that validates tool discovery, annotations, server metadata, and a live tool call.
-- Added `npm run smoke:package` to pack, install, and verify the published binary layout before release.
+- **6 new tools** (4→10): `search_models` (free-text search), `list_providers` (provider browser), `estimate_cost` (budget calculator), `list_new_models` (recent releases feed), `list_model_slugs` (provider slug lookup), `compare_providers` (same model across providers)
+- **BFCL V4 agentic benchmark** — 109+ models with function-calling accuracy scores, percentile ranks
+- **Speed/latency data** — 40+ measured models + heuristic estimates for ALL models based on pricing and family
+- **Quality Index** — `quality` category in `list_top_models` using `getOverallBenchmarkScore()` (0-100 composite)
+- **Streamable HTTP transport** — set `MCP_HTTP_PORT` or `PORT` env var for remote server mode with `/health` endpoint
+- **Cost estimates** in `get_model_info` — per-call costs for typical/large/monthly usage patterns
+- **Filter parity** — `max_input_price`, `max_output_price`, `require_vision`, `require_tools`, `require_open_source` on `list_top_models`
+- **README.zh.md** — full Chinese translation of all documentation
+- **README.ja.md** — fully rewritten to match v0.5 feature set
+- **New Model Detection** section in all 3 READMEs documenting which data auto-detects new models
+
+### Changed
+- `list_top_models("speed")` now ranks by actual tok/s data instead of price proxy. Falls back to heuristic estimate when measured data is unavailable
+- Tool count: 4 → 10, data sources: 5 → 7, percentile categories: 5 → 7
+- `server.json` updated to v0.5.0 with HTTP transport annotation
+
+### Fixed
+- PR #2 Codex review findings (all 5): Perplexity/Inception open-source misclassification, coding composite ranking Arena-only models, package root import side effects, no-live smoke warmup
+- Speed category now correctly uses measured speed data, not price proxy
+- Unescaped model IDs in search, new-models, and providers table outputs
+- Raw price formatting in search.ts replaced with `fmtPrice()` utility
+- Percentiles JSDoc corrected from "five" to "seven" categories
+- Unused `stdioTransport` variable removed
 
 ## [0.4.5] - 2026-06-17
 
@@ -36,76 +43,47 @@ All notable changes to this project will be documented in this file.
 - Glama listing badge in both READMEs (server is live at glama.ai).
 
 ### Changed
-- Dev tooling: vitest 3→4, @types/node 22→25, tsup floor →8.5.1 (npm audit high advisories 6→2; the remaining 2 are dev-only esbuild advisories not reachable in this project). TypeScript stays on 5 (6 breaks tsup's `.d.ts` generation); zod stays on 3 (the MCP SDK requires zod 3).
+- Dev tooling: vitest 3→4, @types/node 22→25, tsup floor →8.5.1
 
 ## [0.4.3] - 2026-06-17
 
 ### Fixed
-- **VLM benchmarks silently dropped to empty since ~2026-04-16.** The OpenCompass data host (`opencompass.openxlab.space`) let its TLS certificate expire (notAfter 2026-04-16), so the fetch threw and — because benchmark enrichment degrades gracefully — all vision scores (MMMU, MMBench, OCRBench, AI2D, MathVista) silently vanished from `get_model_info`, `list_top_models`, `compare_models`, and `recommend_model`. Switched the source to `cdn.opencompass.org.cn/assets/OpenVLM.json` (byte-identical data, valid cert).
+- **VLM benchmarks silently dropped to empty since ~2026-04-16.** TLS cert expiry. Switched to `cdn.opencompass.org.cn/assets/OpenVLM.json`.
 
 ### Added
-- `npm run smoke` — live smoke test that hits all 5 data sources and exits non-zero if any returns zero rows, so a silently-dead source surfaces immediately.
-
-### Changed
-- Bumped `@modelcontextprotocol/sdk` 1.27 → 1.29 and dev tooling (tsx, vitest) within existing semver ranges. No API changes; 51 tests still green.
-
-### Known limitations
-- OpenCompass's upstream VLM data is itself frozen at 2025-09-17, so vision scores reflect models available up to that date.
+- `npm run smoke` — live health check of all 5 data sources.
 
 ## [0.4.2] - 2026-02-25
 
 ### Added
-- Registered to Official MCP Registry (`io.github.Daichi-Kudo/llm-advisor`)
-- `mcpName` field in package.json for registry namespace
-- Dockerfile for containerized deployment (multi-stage build, node:22-alpine)
-- GitHub Release v0.4.2
+- Registered to Official MCP Registry, Dockerfile, GitHub Release
 
 ## [0.4.1] - 2026-02-25
 
 ### Changed
-- Rewrote README.md with badges, use cases, compatible clients table, architecture diagram
-- Added README.ja.md (Japanese)
-- Added GitHub Actions CI workflow (Node 18/20/22 matrix)
-- Optimized package.json: description, keywords (12→18), added homepage/repository/bugs
-- Set 12 GitHub repository topics for discoverability
-- Submitted to 4 MCP directories (mcp.so, mcpservers.org, MCPMarket, awesome-mcp-servers PR)
+- Rewrote README, added Japanese, CI workflow, package metadata
 
 ## [0.4.0] - 2026-02-25
 
 ### Added
-- Release date display in `get_model_info`, `list_top_models`, `compare_models`, `recommend_model`
-- `min_release_date` filter parameter for `list_top_models` and `recommend_model`
-- Freshness scoring in `recommend_model` (+3 points for ≤3 months, +1 for ≤6 months)
-- 8 new tests (freshness + formatters release date) — total 51 tests
+- Release dates, freshness scoring, 8 new tests
 
 ## [0.3.1] - 2026-02-24
 
 ### Fixed
-- Filtered OpenRouter meta-models (`openrouter/auto`, `openrouter/bodybuilder`) with negative pricing that broke recommend_model scoring
-- Improved fuzzy model matching: `gpt-4o` now correctly resolves to base model instead of `gpt-4o-audio-preview`
+- OpenRouter meta-model filtering, fuzzy matching improvements
 
 ## [0.3.0] - 2026-02-24
 
 ### Added
-- VLM benchmarks from OpenCompass: MMMU, MMBench, OCRBench, AI2D, MathVista (284+ models)
-- Aider Polyglot coding benchmark (63+ models)
-- Percentile rank computation across 5 categories (coding, math, general, vision, cost efficiency)
-- 43 unit tests covering normalizer, formatters, percentiles
+- VLM benchmarks, Aider Polyglot, percentile ranks, 43 tests
 
 ## [0.2.0] - 2026-02-23
 
 ### Added
-- `compare_models` tool — side-by-side comparison for 2-5 models with best-value highlighting
-- `recommend_model` tool — personalized top-3 recommendations based on use case, budget, requirements
-- SWE-bench Verified leaderboard integration
-- LM Arena Elo ratings integration
+- `compare_models`, `recommend_model`, SWE-bench, Arena Elo
 
 ## [0.1.0] - 2026-02-23
 
 ### Added
-- Initial release
-- `get_model_info` tool — detailed model specs, pricing, benchmarks, API code examples
-- `list_top_models` tool — category-based ranking (coding, math, vision, general, etc.)
-- OpenRouter API integration (336+ models, pricing, context lengths, modalities)
-- In-memory TTL cache (1h pricing, 6h benchmarks)
-- Cross-source model name normalization
+- Initial release: `get_model_info`, `list_top_models`, OpenRouter integration

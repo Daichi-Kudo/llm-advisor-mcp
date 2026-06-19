@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseSimpleYamlList, normalizeYamlScalar } from "../data/fetchers/aider.js";
+import { buildHfFallbackUrl } from "../data/fetchers/arena.js";
 import { extractModelName } from "../data/fetchers/swe-bench.js";
 import { extractDisplayName, extractScore } from "../data/fetchers/vlm-leaderboard.js";
 
@@ -43,6 +44,8 @@ describe("VLM helpers", () => {
     expect(extractScore({ Overall: 75.2 }, "Overall")).toBe(75.2);
     expect(extractScore({ "Final Score": "80.5" }, "Final Score")).toBe(80.5);
     expect(extractScore({ Overall: 0 }, "Overall")).toBe(0);
+    expect(extractScore({ Overall: -1 }, "Overall")).toBeUndefined();
+    expect(extractScore({ Overall: Infinity }, "Overall")).toBeUndefined();
     expect(extractScore(null, "Overall")).toBeUndefined();
   });
 
@@ -50,5 +53,19 @@ describe("VLM helpers", () => {
     expect(extractDisplayName(["Claude Opus 4.6", "https://example.test"], "fallback")).toBe("Claude Opus 4.6");
     expect(extractDisplayName("Gemini 3 Pro", "fallback")).toBe("Gemini 3 Pro");
     expect(extractDisplayName(undefined, "fallback")).toBe("fallback");
+  });
+});
+
+describe("Arena helpers", () => {
+  it("sets only the HuggingFace offset query parameter", () => {
+    const url = new URL(buildHfFallbackUrl(200));
+    expect(url.searchParams.get("offset")).toBe("200");
+    expect(url.searchParams.get("length")).toBe("100");
+    expect(url.searchParams.get("dataset")).toBe("mathewhe/chatbot-arena-elo");
+  });
+
+  it("rejects invalid HuggingFace offsets", () => {
+    expect(() => buildHfFallbackUrl(-1)).toThrow("Invalid HuggingFace fallback offset");
+    expect(() => buildHfFallbackUrl(1.5)).toThrow("Invalid HuggingFace fallback offset");
   });
 });

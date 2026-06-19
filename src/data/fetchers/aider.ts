@@ -27,7 +27,7 @@ export interface AiderEntry {
 /**
  * Fetch Aider Polyglot benchmark scores.
  * Returns a Map of normalized model names → benchmark scores.
- * Data source: ~63 models from aider.chat GitHub repo (YAML).
+ Data source: ~70 models from aider.chat GitHub repo (YAML).
  */
 export async function fetchAiderScores(
   cache: InMemoryCache
@@ -56,8 +56,8 @@ export async function fetchAiderScores(
     const scores = new Map<string, AiderEntry>();
 
     for (const entry of entries) {
-      const model = entry.model;
-      const passRate2 = parseFloat(entry.pass_rate_2);
+      const model = entry["model"];
+      const passRate2 = parseFloat(entry["pass_rate_2"]);
       if (!model || Number.isNaN(passRate2) || passRate2 <= 0) continue;
 
       const key = normalizeForIndex(model);
@@ -69,10 +69,10 @@ export async function fetchAiderScores(
       scores.set(key, {
         name: model,
         passRate2,
-        passRate1: safeParseFloat(entry.pass_rate_1),
-        wellFormed: safeParseFloat(entry.percent_cases_well_formed),
-        totalCost: safeParseFloat(entry.total_cost),
-        editFormat: entry.edit_format || undefined,
+        passRate1: safeParseFloat(entry["pass_rate_1"]),
+        wellFormed: safeParseFloat(entry["percent_cases_well_formed"]),
+        totalCost: safeParseFloat(entry["total_cost"]),
+        editFormat: entry["edit_format"] || undefined,
       });
     }
 

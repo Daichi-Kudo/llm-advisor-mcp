@@ -31,7 +31,7 @@ export function escapeMarkdownCell(value: string): string {
 
 export function escapeMarkdownInline(value: string): string {
   return value
-    .replace(/[&<>"'\\`*_{}\[\]()#+.!~/-]/g, (char) => HTML_ENTITIES[char] ?? `\\${char}`)
+    .replace(/[&<>"'\\`*_{}\[\]()#+.!~-]/g, (char) => HTML_ENTITIES[char] ?? `\\${char}`)
     .replace(/[\r\n]+/g, " ");
 }
 
@@ -49,7 +49,7 @@ export function fmtPrice(price: number | undefined): string {
 
 /** Format large context lengths: 128000 → "128K", 1000000 → "1M" */
 export function fmtContext(tokens: number | undefined): string {
-  if (tokens === undefined || tokens === null) return "n/a";
+  if (tokens === undefined || tokens === null || !Number.isFinite(tokens) || tokens < 0) return "n/a";
   if (tokens >= 1_000_000) {
     if (tokens % 1_000_000 === 0) return `${tokens / 1_000_000}M`;
     return `${Math.floor(tokens / 100_000) / 10}M`;
@@ -89,7 +89,7 @@ const HTML_ENTITIES: Record<string, string> = {
 
 /** Data freshness footer */
 export function freshnessFooter(fetchedAt?: number): string {
-  if (!fetchedAt) return "";
+  if (fetchedAt === undefined || !Number.isFinite(fetchedAt) || fetchedAt <= 0) return "";
   const date = new Date(fetchedAt).toISOString().replace(/\.\d{3}Z$/, "Z");
   const ageMin = Math.round((Date.now() - fetchedAt) / 60_000);
   return `\n**Data freshness**: ${date} (${ageMin}min ago)`;
@@ -123,8 +123,17 @@ export function formatModelDetail(model: UnifiedModel, fetchedAt?: number): stri
   if (model.pricing.cacheRead !== undefined) {
     lines.push(`| Cache Read | ${fmtPrice(model.pricing.cacheRead)} /1M tok |`);
   }
+  if (model.pricing.cacheWrite !== undefined) {
+    lines.push(`| Cache Write | ${fmtPrice(model.pricing.cacheWrite)} /1M tok |`);
+  }
   if (model.pricing.reasoning !== undefined) {
     lines.push(`| Reasoning | ${fmtPrice(model.pricing.reasoning)} /1M tok |`);
+  }
+  if (model.pricing.request !== undefined) {
+    lines.push(`| Request | ${fmtPrice(model.pricing.request)} /request |`);
+  }
+  if (model.pricing.image !== undefined) {
+    lines.push(`| Image | ${fmtPrice(model.pricing.image)} /image |`);
   }
   lines.push(`| Context | ${fmtContext(model.capabilities.contextLength)} |`);
   if (model.capabilities.maxOutputTokens !== undefined) {
@@ -169,6 +178,20 @@ export function formatModelDetail(model: UnifiedModel, fetchedAt?: number): stri
   if (caps.length > 0) {
     lines.push("");
     lines.push(`**Capabilities**: ${caps.join(", ")}`);
+  }
+
+  // Speed data (if available)
+  if (model.speed.outputTokensPerSecond !== undefined || model.speed.timeToFirstToken !== undefined) {
+    lines.push("");
+    lines.push("### Speed");
+    lines.push("| Metric | Value |");
+    lines.push("|--------|-------|");
+    if (model.speed.outputTokensPerSecond !== undefined) {
+      lines.push(`| Output Speed | ${model.speed.outputTokensPerSecond} tok/s |`);
+    }
+    if (model.speed.timeToFirstToken !== undefined) {
+      lines.push(`| Time to First Token | ${model.speed.timeToFirstToken.toFixed(2)}s |`);
+    }
   }
 
   lines.push(freshnessFooter(fetchedAt));
@@ -220,6 +243,13 @@ function benchmarkLabel(key: string): string {
     ocrBench: "OCRBench",
     ai2d: "AI2D",
     mathVista: "MathVista",
+    bfclV4Overall: "BFCL V4 Overall",
+    bfclV4Agentic: "BFCL V4 Agentic",
+    bfclV4MultiTurn: "BFCL V4 Multi-Turn",
+    bfclV4SingleTurn: "BFCL V4 Single-Turn",
+    bfclV4Cost: "BFCL V4 Cost",
+    outputTokensPerSecond: "Output Speed",
+    timeToFirstToken: "Time to First Token",
   };
   return labels[key] ?? key;
 }
@@ -232,6 +262,8 @@ function percentileLabel(key: string): string {
     general: "General",
     vision: "Vision",
     costEfficiency: "Cost Efficiency",
+    speed: "Speed",
+    agentic: "Agentic",
   };
   return labels[key] ?? key;
 }

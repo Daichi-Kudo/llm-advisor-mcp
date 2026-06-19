@@ -1,20 +1,26 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Daichi-Kudo/llm-advisor",
-  "description": "Real-time LLM/VLM benchmarks, pricing, and recommendations. 300+ models, 5 sources.",
+  "description": "LLM/VLM model selection: live pricing, benchmarks, and recommendations for 300+ models.",
   "repository": {
     "url": "https://github.com/Daichi-Kudo/llm-advisor-mcp",
     "source": "github"
   },
-  "version": "0.4.5",
+  "version": "0.5.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "llm-advisor-mcp",
-      "version": "0.4.5",
+      "version": "0.5.0",
       "transport": {
         "type": "stdio"
       },
+      "additionalTransports": [
+        {
+          "type": "streamable-http",
+          "description": "Set MCP_HTTP_PORT or PORT environment variable to enable"
+        }
+      ],
       "environmentVariables": []
     }
   ]

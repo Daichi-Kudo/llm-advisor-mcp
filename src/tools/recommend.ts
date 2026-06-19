@@ -151,6 +151,8 @@ export function computeFreshnessBonus(releaseDate?: string): number {
   const released = new Date(releaseDate).getTime();
   if (isNaN(released)) return 0;
   const ageMs = Date.now() - released;
+  // Future release dates get no bonus
+  if (ageMs < 0) return 0;
   const ageDays = ageMs / (1000 * 60 * 60 * 24);
   if (ageDays <= 90) return 3;   // Last 3 months
   if (ageDays <= 180) return 1;  // Last 6 months

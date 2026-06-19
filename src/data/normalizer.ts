@@ -3,6 +3,8 @@ import type { SweBenchEntry } from "./fetchers/swe-bench.js";
 import type { ArenaEntry } from "./fetchers/arena.js";
 import type { VlmEntry } from "./fetchers/vlm-leaderboard.js";
 import type { AiderEntry } from "./fetchers/aider.js";
+import type { BfclEntry } from "./fetchers/bfcl.js";
+import type { SpeedEntry } from "./fetchers/speed.js";
 
 /**
  * Normalize a model name to a canonical key for cross-source matching.
@@ -123,7 +125,9 @@ export function mergeBenchmarkData(
   sweScores: Map<string, SweBenchEntry>,
   arenaScores: Map<string, ArenaEntry>,
   vlmScores?: Map<string, VlmEntry>,
-  aiderScores?: Map<string, AiderEntry>
+  aiderScores?: Map<string, AiderEntry>,
+  bfclScores?: Map<string, BfclEntry>,
+  speedEntries?: Map<string, SpeedEntry>
 ): void {
   // Build a reverse lookup: normalizedKey → OpenRouter model ID
   const keyToId = buildKeyToId(models);
@@ -140,7 +144,9 @@ export function mergeBenchmarkData(
       !model.benchmarks.sweBenchVerified ||
       sweEntry.resolved > model.benchmarks.sweBenchVerified
     ) {
-      model.benchmarks.sweBenchVerified = sweEntry.resolved;
+      if (Number.isFinite(sweEntry.resolved)) {
+        model.benchmarks.sweBenchVerified = sweEntry.resolved;
+      }
     }
   }
 
@@ -156,7 +162,9 @@ export function mergeBenchmarkData(
       !model.benchmarks.arenaElo ||
       arenaEntry.arenaScore > model.benchmarks.arenaElo
     ) {
-      model.benchmarks.arenaElo = arenaEntry.arenaScore;
+      if (Number.isFinite(arenaEntry.arenaScore)) {
+        model.benchmarks.arenaElo = arenaEntry.arenaScore;
+      }
     }
   }
 
@@ -168,20 +176,22 @@ export function mergeBenchmarkData(
 
       const model = models.get(matchedId);
       if (!model) continue;
+      // A text-only model must not inherit vision benchmarks from a name-colliding VLM entry.
+      if (!model.capabilities.inputModalities.includes("image")) continue;
 
-      if (vlmEntry.mmmu !== undefined && (!model.benchmarks.mmmu || vlmEntry.mmmu > model.benchmarks.mmmu)) {
+      if (vlmEntry.mmmu !== undefined && Number.isFinite(vlmEntry.mmmu) && (!model.benchmarks.mmmu || vlmEntry.mmmu > model.benchmarks.mmmu)) {
         model.benchmarks.mmmu = vlmEntry.mmmu;
       }
-      if (vlmEntry.mmBench !== undefined && (!model.benchmarks.mmBench || vlmEntry.mmBench > model.benchmarks.mmBench)) {
+      if (vlmEntry.mmBench !== undefined && Number.isFinite(vlmEntry.mmBench) && (!model.benchmarks.mmBench || vlmEntry.mmBench > model.benchmarks.mmBench)) {
         model.benchmarks.mmBench = vlmEntry.mmBench;
       }
-      if (vlmEntry.ocrBench !== undefined && (!model.benchmarks.ocrBench || vlmEntry.ocrBench > model.benchmarks.ocrBench)) {
+      if (vlmEntry.ocrBench !== undefined && Number.isFinite(vlmEntry.ocrBench) && (!model.benchmarks.ocrBench || vlmEntry.ocrBench > model.benchmarks.ocrBench)) {
         model.benchmarks.ocrBench = vlmEntry.ocrBench;
       }
-      if (vlmEntry.ai2d !== undefined && (!model.benchmarks.ai2d || vlmEntry.ai2d > model.benchmarks.ai2d)) {
+      if (vlmEntry.ai2d !== undefined && Number.isFinite(vlmEntry.ai2d) && (!model.benchmarks.ai2d || vlmEntry.ai2d > model.benchmarks.ai2d)) {
         model.benchmarks.ai2d = vlmEntry.ai2d;
       }
-      if (vlmEntry.mathVista !== undefined && (!model.benchmarks.mathVista || vlmEntry.mathVista > model.benchmarks.mathVista)) {
+      if (vlmEntry.mathVista !== undefined && Number.isFinite(vlmEntry.mathVista) && (!model.benchmarks.mathVista || vlmEntry.mathVista > model.benchmarks.mathVista)) {
         model.benchmarks.mathVista = vlmEntry.mathVista;
       }
     }
@@ -200,7 +210,61 @@ export function mergeBenchmarkData(
         !model.benchmarks.aiderPolyglot ||
         aiderEntry.passRate2 > model.benchmarks.aiderPolyglot
       ) {
-        model.benchmarks.aiderPolyglot = aiderEntry.passRate2;
+        if (Number.isFinite(aiderEntry.passRate2)) {
+          model.benchmarks.aiderPolyglot = aiderEntry.passRate2;
+        }
+      }
+    }
+  }
+
+  // Merge BFCL V4 agentic benchmark scores
+  if (bfclScores) {
+    for (const [, bfclEntry] of bfclScores) {
+      const matchedId = findMatch(bfclEntry.name, keyToId);
+      if (!matchedId) continue;
+
+      const model = models.get(matchedId);
+      if (!model) continue;
+
+      if (bfclEntry.overall !== undefined && Number.isFinite(bfclEntry.overall) &&
+          (!model.benchmarks.bfclV4Overall || bfclEntry.overall > model.benchmarks.bfclV4Overall)) {
+        model.benchmarks.bfclV4Overall = bfclEntry.overall;
+      }
+      if (bfclEntry.agentic !== undefined && Number.isFinite(bfclEntry.agentic) &&
+          (!model.benchmarks.bfclV4Agentic || bfclEntry.agentic > model.benchmarks.bfclV4Agentic)) {
+        model.benchmarks.bfclV4Agentic = bfclEntry.agentic;
+      }
+      if (bfclEntry.multiTurn !== undefined && Number.isFinite(bfclEntry.multiTurn) &&
+          (!model.benchmarks.bfclV4MultiTurn || bfclEntry.multiTurn > model.benchmarks.bfclV4MultiTurn)) {
+        model.benchmarks.bfclV4MultiTurn = bfclEntry.multiTurn;
+      }
+      if (bfclEntry.singleTurn !== undefined && Number.isFinite(bfclEntry.singleTurn) &&
+          (!model.benchmarks.bfclV4SingleTurn || bfclEntry.singleTurn > model.benchmarks.bfclV4SingleTurn)) {
+        model.benchmarks.bfclV4SingleTurn = bfclEntry.singleTurn;
+      }
+      if (bfclEntry.cost !== undefined && Number.isFinite(bfclEntry.cost) &&
+          (!model.benchmarks.bfclV4Cost || bfclEntry.cost < model.benchmarks.bfclV4Cost)) {
+        model.benchmarks.bfclV4Cost = bfclEntry.cost;
+      }
+    }
+  }
+
+  // Merge speed/latency data
+  if (speedEntries) {
+    for (const [, speedEntry] of speedEntries) {
+      const matchedId = findMatch(speedEntry.name, keyToId);
+      if (!matchedId) continue;
+
+      const model = models.get(matchedId);
+      if (!model) continue;
+
+      if (speedEntry.outputTokensPerSecond !== undefined && Number.isFinite(speedEntry.outputTokensPerSecond)) {
+        model.speed.outputTokensPerSecond = speedEntry.outputTokensPerSecond;
+        model.benchmarks.outputTokensPerSecond = speedEntry.outputTokensPerSecond;
+      }
+      if (speedEntry.timeToFirstToken !== undefined && Number.isFinite(speedEntry.timeToFirstToken)) {
+        model.speed.timeToFirstToken = speedEntry.timeToFirstToken;
+        model.benchmarks.timeToFirstToken = speedEntry.timeToFirstToken;
       }
     }
   }

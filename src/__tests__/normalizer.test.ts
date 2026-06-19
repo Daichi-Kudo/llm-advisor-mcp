@@ -39,8 +39,8 @@ describe("normalizeKey", () => {
 
   it("strips -chat and -latest but keeps -preview and -mini", () => {
     expect(normalizeKey("gpt-5.2-chat-latest")).toBe("gpt-5.2");
-    expect(normalizeKey("gpt-5.2-preview")).toContain("preview");
-    expect(normalizeKey("gpt-5.2-mini")).toContain("mini");
+    expect(normalizeKey("gpt-5.2-preview")).toBe("gpt-5.2-preview");
+    expect(normalizeKey("gpt-5.2-mini")).toBe("gpt-5.2-mini");
   });
 
   it("does not strip high, medium, or low inside model names", () => {
@@ -93,6 +93,7 @@ describe("mergeBenchmarkData", () => {
         isOpenSource: false,
       },
       percentiles: {},
+      speed: {},
       lastUpdated: new Date().toISOString(),
     };
   }
@@ -216,6 +217,7 @@ describe("findMatch", () => {
       },
       metadata: { provider: "test", family: "test", isOpenSource: false },
       percentiles: {},
+      speed: {},
       lastUpdated: "2026-01-01T00:00:00.000Z",
     };
   }

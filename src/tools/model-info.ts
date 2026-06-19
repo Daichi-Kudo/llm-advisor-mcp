@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ModelRegistry } from "../data/registry.js";
-import { escapeMarkdownInline, formatModelDetail } from "./formatters.js";
+import { escapeMarkdownInline, formatModelDetail, fmtPrice, fmtContext } from "./formatters.js";
 import { getApiExample } from "../data/static/api-examples.js";
 import { MCP_REGISTRY_NAME, SERVER_VERSION } from "../metadata.js";
 import { ensureRegistryLoaded } from "./schemas.js";
@@ -40,9 +40,13 @@ export function registerModelInfoTool(
           .enum(["openai_sdk", "curl", "python_requests"])
           .default("openai_sdk")
           .describe("API example format (default: openai_sdk)"),
+        include_cost_estimate: z
+          .boolean()
+          .default(true)
+          .describe("Include per-call cost estimates for common usage patterns (default: true)"),
       },
     },
-    async ({ model, include_api_example, api_format }) => {
+    async ({ model, include_api_example, api_format, include_cost_estimate }) => {
       const loadError = await ensureRegistryLoaded(registry);
       if (loadError) return loadError;
 
@@ -62,6 +66,30 @@ export function registerModelInfoTool(
 
       const fetchedAt = registry.getCacheFreshnessMs();
       let output = formatModelDetail(found, fetchedAt);
+
+      // Add cost estimates
+      if (include_cost_estimate && found.pricing.input > 0 && found.pricing.output > 0) {
+        const inputPrice = found.pricing.input;
+        const outputPrice = found.pricing.output;
+
+        // Typical call: 10K input + 2K output
+        const typicalInput = (10_000 / 1_000_000) * inputPrice;
+        const typicalOutput = (2_000 / 1_000_000) * outputPrice;
+        const typicalTotal = typicalInput + typicalOutput;
+
+        // Large call: 100K input + 10K output
+        const largeInput = (100_000 / 1_000_000) * inputPrice;
+        const largeOutput = (10_000 / 1_000_000) * outputPrice;
+        const largeTotal = largeInput + largeOutput;
+
+        // Monthly: 1000 typical calls/day × 30 days
+        const monthlyTotal = typicalTotal * 30_000;
+
+        output += `\n\n### Cost Estimates\n| Scenario | Input | Output | Total |\n|----------|-------|--------|------|\n`;
+        output += `| 10K in / 2K out (typical) | ${fmtPrice(typicalInput)} | ${fmtPrice(typicalOutput)} | **${fmtPrice(typicalTotal)}** |\n`;
+        output += `| 100K in / 10K out (large) | ${fmtPrice(largeInput)} | ${fmtPrice(largeOutput)} | **${fmtPrice(largeTotal)}** |\n`;
+        output += `| 1K calls/day monthly | — | — | **${fmtPrice(monthlyTotal)}** |\n`;
+      }
 
       // Add API example
       if (include_api_example) {

@@ -204,12 +204,20 @@ async function fetchFromHuggingFace(): Promise<Map<string, ArenaEntry>> {
     if (pages > cappedPages) {
       console.error(`Arena HuggingFace fallback has ${first.total} rows; fetching first ${cappedPages * 100} rows only`);
     }
-    const remainingPages = await Promise.all(
-      Array.from({ length: cappedPages - 1 }, (_, i) => fetchHfPage((i + 1) * 100))
+    const remainingPromises = Array.from(
+      { length: cappedPages - 1 },
+      (_, i) => fetchHfPage((i + 1) * 100)
     );
-    for (const page of remainingPages) {
-      for (const entry of page.entries) {
-        scores.set(normalizeForIndex(entry.name), entry);
+    const remainingResults = await Promise.allSettled(remainingPromises);
+    for (let i = 0; i < remainingResults.length; i++) {
+      const result = remainingResults[i];
+      if (result.status === "fulfilled") {
+        for (const entry of result.value.entries) {
+          scores.set(normalizeForIndex(entry.name), entry);
+        }
+      } else {
+        const offset = (i + 1) * 100;
+        console.error(`HF datasets-server page ${offset} failed: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`);
       }
     }
   }
@@ -220,7 +228,7 @@ async function fetchFromHuggingFace(): Promise<Map<string, ArenaEntry>> {
 async function fetchHfPage(
   offset: number
 ): Promise<{ entries: ArenaEntry[]; total: number }> {
-  const url = `${HF_FALLBACK_URL.replace("offset=0", `offset=${offset}`)}`;
+  const url = buildHfFallbackUrl(offset);
   const response = await fetch(url, {
     headers: { "User-Agent": `${SERVER_NAME}/${SERVER_VERSION}` },
     redirect: "error",
@@ -267,6 +275,15 @@ async function fetchHfPage(
   }
 
   return { entries, total: data.num_rows_total };
+}
+
+export function buildHfFallbackUrl(offset: number): string {
+  if (!Number.isInteger(offset) || offset < 0) {
+    throw new Error(`Invalid HuggingFace fallback offset: ${offset}`);
+  }
+  const url = new URL(HF_FALLBACK_URL);
+  url.searchParams.set("offset", String(offset));
+  return url.toString();
 }
 
 function isFiniteNumber(value: unknown): value is number {

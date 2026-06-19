@@ -20,12 +20,11 @@ export async function ensureRegistryLoaded(registry: ModelRegistry): Promise<{
     await registry.ensureLoaded();
     return null;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
     return {
       content: [
         {
           type: "text",
-          text: `Model data is temporarily unavailable. ${message}`,
+          text: "Model data is temporarily unavailable. Please retry shortly.",
         },
       ],
       isError: true,

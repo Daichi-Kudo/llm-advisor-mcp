@@ -6,6 +6,7 @@ import {
   fmtElo,
   fmtModalities,
   escapeMarkdownInline,
+  freshnessFooter,
   buildMarkdownTable,
   formatModelDetail,
 } from "../tools/formatters.js";
@@ -28,7 +29,9 @@ describe("fmtPrice", () => {
     expect(fmtPrice(0.0000000000123)).toBe("< $0.0000000001");
   });
   it("formats small prices with 4 decimals", () => expect(fmtPrice(0.005)).toBe("$0.0050"));
+  it("rounds sub-cent prices up without dropping the cent boundary", () => expect(fmtPrice(0.009999)).toBe("$0.0100"));
   it("formats normal prices with 2 decimals", () => expect(fmtPrice(3.0)).toBe("$3.00"));
+  it("formats very large prices without scientific notation", () => expect(fmtPrice(999999)).toBe("$999999.00"));
 });
 
 describe("escapeMarkdownInline", () => {
@@ -94,6 +97,20 @@ describe("buildMarkdownTable", () => {
   });
 });
 
+describe("freshnessFooter", () => {
+  it("formats millisecond epoch timestamps as UTC ISO strings", () => {
+    const realNow = Date.now;
+    Date.now = () => Date.parse("2026-06-19T12:35:00Z");
+    try {
+      expect(freshnessFooter(Date.parse("2026-06-19T12:05:00Z"))).toBe(
+        "\n**Data freshness**: 2026-06-19T12:05:00Z (30min ago)"
+      );
+    } finally {
+      Date.now = realNow;
+    }
+  });
+});
+
 describe("formatModelDetail", () => {
   function makeModel(overrides: Partial<UnifiedModel> = {}): UnifiedModel {
     return {
@@ -116,6 +133,7 @@ describe("formatModelDetail", () => {
         isOpenSource: false,
       },
       percentiles: { coding: 95, general: 98 },
+      speed: {},
       lastUpdated: new Date().toISOString(),
       ...overrides,
     };
@@ -123,7 +141,7 @@ describe("formatModelDetail", () => {
 
   it("includes model ID as heading", () => {
     const output = formatModelDetail(makeModel());
-    expect(output).toContain("## anthropic\\/claude\\-opus\\-4\\.6");
+    expect(output).toContain("## anthropic/claude\\-opus\\-4\\.6");
   });
 
   it("escapes external Markdown in headings and metadata", () => {
@@ -132,7 +150,7 @@ describe("formatModelDetail", () => {
       metadata: { provider: "provider_[x](y)#1", family: "test", isOpenSource: false },
     }));
 
-    expect(output).toContain("## provider\\/model\\_\\[x\\]\\(y\\)\\#1");
+    expect(output).toContain("## provider/model\\_\\[x\\]\\(y\\)\\#1");
     expect(output).toContain("**Provider**: provider\\_\\[x\\]\\(y\\)\\#1");
   });
 

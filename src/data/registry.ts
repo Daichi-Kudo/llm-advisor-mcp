@@ -5,6 +5,8 @@ import { fetchSweBenchScores } from "./fetchers/swe-bench.js";
 import { fetchArenaScores } from "./fetchers/arena.js";
 import { fetchVlmScores } from "./fetchers/vlm-leaderboard.js";
 import { fetchAiderScores } from "./fetchers/aider.js";
+import { fetchBfclScores } from "./fetchers/bfcl.js";
+import { fetchSpeedData, generateUniversalSpeedData } from "./fetchers/speed.js";
 import { mergeBenchmarkData } from "./normalizer.js";
 import {
   computePercentiles,
@@ -58,7 +60,7 @@ export class ModelRegistry {
         this.ready = true;
       })
       .catch((error) => {
-        this.ready = false;
+        this.ready = this.models.size > 0;
         this.lastLoadFailureAt = Date.now();
         this.lastLoadError = error;
         throw error;
@@ -79,16 +81,56 @@ export class ModelRegistry {
     }
 
     // Phase 2: Enrich with benchmark data (best-effort, parallel)
-    const [sweScores, arenaScores, vlmScores, aiderScores] = await Promise.all([
-      fetchSweBenchScores(this.cache).catch(() => new Map()),
-      fetchArenaScores(this.cache).catch(() => new Map()),
-      fetchVlmScores(this.cache).catch(() => new Map()),
-      fetchAiderScores(this.cache).catch(() => new Map()),
+    const [sweScores, arenaScores, vlmScores, aiderScores, bfclScores, speedEntries] = await Promise.all([
+      fetchSweBenchScores(this.cache).catch((err) => {
+        console.error("SWE-bench enrichment failed unexpectedly:", err);
+        return new Map();
+      }),
+      fetchArenaScores(this.cache).catch((err) => {
+        console.error("Arena enrichment failed unexpectedly:", err);
+        return new Map();
+      }),
+      fetchVlmScores(this.cache).catch((err) => {
+        console.error("VLM enrichment failed unexpectedly:", err);
+        return new Map();
+      }),
+      fetchAiderScores(this.cache).catch((err) => {
+        console.error("Aider enrichment failed unexpectedly:", err);
+        return new Map();
+      }),
+      fetchBfclScores(this.cache).catch((err) => {
+        console.error("BFCL enrichment failed unexpectedly:", err);
+        return new Map();
+      }),
+      fetchSpeedData(this.cache).catch((err) => {
+        console.error("Speed data enrichment failed unexpectedly:", err);
+        return new Map();
+      }),
     ]);
 
-    mergeBenchmarkData(models, sweScores, arenaScores, vlmScores, aiderScores);
+    mergeBenchmarkData(models, sweScores, arenaScores, vlmScores, aiderScores, bfclScores, speedEntries);
 
-    // Phase 3: Compute percentile ranks across all models
+    // Phase 3: Assign estimated speed data to ANY model without measured data.
+    // This ensures every model in the registry has speed/latency estimates,
+    // even when no real benchmark data exists yet.
+    const universalSpeed = generateUniversalSpeedData(
+      Array.from(models.values()).map((m) => ({
+        id: m.id,
+        pricing: { input: m.pricing.input },
+      }))
+    );
+    for (const [, model] of models) {
+      const key = model.id.toLowerCase().replace(/[^a-z0-9/.\-]/g, "");
+      const speed = universalSpeed.get(key);
+      if (speed && model.speed.outputTokensPerSecond === undefined) {
+        model.speed.outputTokensPerSecond = speed.outputTokensPerSecond;
+        model.speed.timeToFirstToken = speed.timeToFirstToken;
+        model.benchmarks.outputTokensPerSecond = speed.outputTokensPerSecond;
+        model.benchmarks.timeToFirstToken = speed.timeToFirstToken;
+      }
+    }
+
+    // Phase 4: Compute percentile ranks across all models
     computePercentiles(models);
     this.models = models;
   }
@@ -108,6 +150,9 @@ export class ModelRegistry {
 
     const queryLower = query.toLowerCase();
     const querySlug = queryLower.replace(/[^a-z0-9/\-]/g, "");
+    // A punctuation-only or empty query must not return an arbitrary model
+    // via the substring (step 4) path where empty string matches everything.
+    if (querySlug.length < 2) return null;
 
     // 2. Case-insensitive exact match
     for (const [id, model] of this.models) {
@@ -195,10 +240,20 @@ export class ModelRegistry {
         ));
 
       case "speed":
-        // Sort by price (proxy for speed — lower price models tend to be faster inference)
-        // Real speed data would come from a future data source
         return takeCloned(allModels
-          .sort((a, b) => a.pricing.output - b.pricing.output || a.id.localeCompare(b.id))
+          .sort((a, b) => {
+            const aSpeed = a.speed.outputTokensPerSecond ?? a.pricing.output;
+            const bSpeed = b.speed.outputTokensPerSecond ?? b.pricing.output;
+            // Higher speed = better rank. Fall back to inverse price if no speed data.
+            if (a.speed.outputTokensPerSecond !== undefined && b.speed.outputTokensPerSecond !== undefined) {
+              return b.speed.outputTokensPerSecond - a.speed.outputTokensPerSecond || a.id.localeCompare(b.id);
+            }
+            // One has speed data, one doesn't — prefer the one with data
+            if (a.speed.outputTokensPerSecond !== undefined) return -1;
+            if (b.speed.outputTokensPerSecond !== undefined) return 1;
+            // Neither has speed data — fall back to price proxy
+            return a.pricing.output - b.pricing.output || a.id.localeCompare(b.id);
+          })
         );
 
       case "context-window":
@@ -210,6 +265,12 @@ export class ModelRegistry {
         return takeCloned(sortByComposite(
           allModels.filter((m) => m.capabilities.supportsReasoning),
           (m) => getCompositeBenchmarkScore(m, "reasoning") ?? getCompositeBenchmarkScore(m, "general")
+        ));
+
+      case "quality":
+        return takeCloned(sortByComposite(
+          allModels,
+          (m) => getOverallBenchmarkScore(m)
         ));
 
       default:
@@ -231,6 +292,8 @@ const DATA_CACHE_KEYS = [
   "arena:elo",
   "vlm:opencompass",
   "aider:polyglot",
+  "bfcl:v4",
+  "speed:static",
 ];
 
 function formatLoadError(error: unknown): string {
@@ -246,9 +309,11 @@ function sortByComposite(
   scoreFn: (model: UnifiedModel) => number | undefined
 ): UnifiedModel[] {
   const scores = new Map(models.map((model) => [model.id, scoreFn(model)]));
+  const normalize = (s: number | undefined) =>
+    s !== undefined && Number.isFinite(s) ? s : undefined;
   return [...models].sort((a, b) => {
-    const aScore = scores.get(a.id);
-    const bScore = scores.get(b.id);
+    const aScore = normalize(scores.get(a.id));
+    const bScore = normalize(scores.get(b.id));
 
     if (aScore !== undefined && bScore !== undefined && aScore !== bScore) {
       return bScore - aScore;
@@ -301,5 +366,5 @@ function comparePricePerformance(a: UnifiedModel, b: UnifiedModel): number {
   const bScore = bBlended > 0 && bPerf !== undefined ? bPerf / bBlended : -Infinity;
   if (aScore !== bScore) return bScore - aScore;
 
-  return a.pricing.output - b.pricing.output;
+  return aBlended - bBlended || a.id.localeCompare(b.id);
 }

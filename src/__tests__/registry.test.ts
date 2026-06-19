@@ -34,6 +34,7 @@ function makeModel(
       ...overrides.metadata,
     },
     percentiles: {},
+    speed: {},
     lastUpdated: "2026-01-01T00:00:00Z",
   };
 }
@@ -121,7 +122,7 @@ describe("ModelRegistry.getTopModels", () => {
   });
 });
 
-describe("modelMatchesFilters", () => {
+describe("ModelRegistry.findSimilar", () => {
   it("does not suggest unrelated models for one-character queries", () => {
     const registry = makeRegistry([
       makeModel("openai/gpt-5.1"),
@@ -130,7 +131,9 @@ describe("modelMatchesFilters", () => {
 
     expect(registry.findSimilar("g")).toEqual([]);
   });
+});
 
+describe("modelMatchesFilters", () => {
   it("applies shared recommendation and top-list filters", () => {
     const model = makeModel("candidate", {
       pricing: { input: 2, output: 5 },
@@ -152,6 +155,7 @@ describe("modelMatchesFilters", () => {
     expect(modelMatchesFilters(model, { maxOutputPrice: 4 })).toBe(false);
     expect(modelMatchesFilters(model, { minContext: 200_000 })).toBe(false);
     expect(modelMatchesFilters(model, { minReleaseDate: "2026-02-01" })).toBe(false);
+    expect(modelMatchesFilters(makeModel("missing-release"), { minReleaseDate: "2026-01-01" })).toBe(false);
     expect(modelMatchesFilters(makeModel("text-only"), { requireVision: true })).toBe(false);
     expect(modelMatchesFilters(makeModel("no-tools"), { requireTools: true })).toBe(false);
     expect(modelMatchesFilters(makeModel("closed"), { requireOpenSource: true })).toBe(false);

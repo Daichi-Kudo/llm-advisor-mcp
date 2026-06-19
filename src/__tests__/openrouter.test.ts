@@ -3,6 +3,7 @@ import { InMemoryCache } from "../data/cache.js";
 import { fetchOpenRouterModels, isOpenSource } from "../data/fetchers/openrouter.js";
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 

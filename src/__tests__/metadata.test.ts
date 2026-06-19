@@ -17,6 +17,7 @@ describe("server metadata", () => {
     expect(packageJson.files).toContain("server.json");
 
     const [npmPackage] = serverJson.packages;
+    expect(serverJson.packages).toHaveLength(1);
     expect(npmPackage.registryType).toBe("npm");
     expect(npmPackage.identifier).toBe(packageJson.name);
     expect(npmPackage.version).toBe(packageJson.version);

@@ -7,10 +7,16 @@ import { SERVER_NAME } from "../src/metadata.js";
 
 const DIST_ENTRY = "dist/index.js";
 const EXPECTED_TOOLS = [
-  "get_model_info",
-  "list_top_models",
   "compare_models",
+  "compare_providers",
+  "estimate_cost",
+  "get_model_info",
+  "list_new_models",
+  "list_providers",
+  "list_model_slugs",
+  "list_top_models",
   "recommend_model",
+  "search_models",
 ] as const;
 const MAX_STDERR_CHARS = 2_000;
 
@@ -49,6 +55,9 @@ async function main(): Promise<void> {
     command: process.execPath,
     args: [DIST_ENTRY],
     stderr: "pipe",
+    env: process.env.LLM_ADVISOR_MCP_SMOKE_LIVE === "0"
+      ? { ...(process.env as Record<string, string>), LLM_ADVISOR_MCP_SKIP_WARMUP: "1" }
+      : undefined,
   });
 
   let stderr = "";

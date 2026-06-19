@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computePercentiles, getCompositeBenchmarkScore, getCostEfficiencyScore } from "../data/percentiles.js";
+import { computePercentiles, getBlendedTokenPrice, getCompositeBenchmarkScore, getCostEfficiencyScore } from "../data/percentiles.js";
 import type { UnifiedModel } from "../types.js";
 
 function makeModel(
@@ -31,6 +31,7 @@ function makeModel(
       isOpenSource: false,
     },
     percentiles: {},
+    speed: {},
     lastUpdated: new Date().toISOString(),
   };
 }
@@ -63,8 +64,15 @@ describe("getCompositeBenchmarkScore", () => {
   });
 });
 
+describe("getBlendedTokenPrice", () => {
+  it("rounds binary floating-point artifacts in weighted price calculations", () => {
+    const model = makeModel("float-price", { pricing: { input: 0.1, output: 0.3 } });
+    expect(getBlendedTokenPrice(model)).toBe(0.15);
+  });
+});
+
 describe("computePercentiles", () => {
-  it("assigns coding percentiles based on SWE-bench and Aider scores", () => {
+  it("assigns coding percentiles based on SWE-bench scores", () => {
     const models = new Map<string, UnifiedModel>();
     models.set("low", makeModel("low", { benchmarks: { sweBenchVerified: 30 } }));
     models.set("mid", makeModel("mid", { benchmarks: { sweBenchVerified: 50 } }));
@@ -86,6 +94,7 @@ describe("computePercentiles", () => {
     computePercentiles(models);
 
     expect(models.get("a")!.percentiles.general).toBe(0);
+    expect(models.get("b")!.percentiles.general).toBe(50);
     expect(models.get("c")!.percentiles.general).toBe(100);
   });
 
@@ -135,6 +144,7 @@ describe("computePercentiles", () => {
 
     // Both tied models should have the same percentile
     expect(models.get("a")!.percentiles.coding).toBe(models.get("b")!.percentiles.coding);
+    expect(models.get("a")!.percentiles.coding).toBe(0);
     expect(models.get("c")!.percentiles.coding).toBe(100);
   });
 

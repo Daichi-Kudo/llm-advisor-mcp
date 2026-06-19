@@ -1,12 +1,10 @@
 {
   "name": "llm-advisor-mcp",
-  "version": "0.4.5",
+  "version": "0.5.0",
   "mcpName": "io.github.Daichi-Kudo/llm-advisor",
-  "description": "MCP server for LLM/VLM model selection — compare 300+ models with real-time benchmarks, pricing, and personalized recommendations. No API key required.",
+  "description": "MCP server for LLM/VLM model selection with 10 tools: compare 300+ models across 7 data sources with pricing, benchmarks, recommendations, cost estimation, and provider comparison. No API key required.",
   "type": "module",
-  "main": "dist/index.js",
   "exports": {
-    ".": "./dist/index.js",
     "./package.json": "./package.json"
   },
   "bin": {
@@ -26,7 +24,8 @@
     "smoke": "tsx scripts/smoke.ts",
     "smoke:mcp": "tsx scripts/mcp-smoke.ts",
     "smoke:package": "tsx scripts/package-smoke.ts",
-    "prepublishOnly": "npm test && npm run build && SKIP_BUILD=1 npm run smoke:package"
+    "prepublishOnly": "npm test && npm run build && SKIP_BUILD=1 npm run smoke:package",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [
     "mcp",
@@ -62,18 +61,21 @@
   },
   "license": "MIT",
   "engines": {
-    "node": ">=18.0.0",
+    "node": ">=20.19.0",
     "npm": ">=9.0.0"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "express": "^5.2.1",
     "zod": "^3.23.0"
   },
   "overrides": {
     "esbuild": "^0.28.1"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^25.9.3",
+    "@vitest/coverage-v8": "^4.1.9",
     "tsup": "^8.5.1",
     "tsx": "^4.0.0",
     "typescript": "^5.9.3",

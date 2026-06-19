@@ -9,6 +9,7 @@ import {
   getBlendedTokenPrice,
   getCompositeBenchmarkScore,
   getCostEfficiencyScore,
+  getOverallBenchmarkScore,
 } from "../data/percentiles.js";
 
 export function registerListTopTool(
@@ -21,8 +22,9 @@ export function registerListTopTool(
       title: "List top models",
       description:
         `List top-ranked LLM/VLM models for a category (llm-advisor ${SERVER_VERSION}, MCP registry ${MCP_REGISTRY_NAME}). ` +
-        "Categories: coding, math, vision, general, cost-effective, open-source, speed, context-window, reasoning. " +
-        "Speed uses output price as a proxy because live latency data is not available. " +
+        "Categories: coding, math, vision, general, cost-effective, open-source, speed, context-window, reasoning, quality. " +
+        "quality uses the Overall Quality Index (0-100 composite across all benchmarks). " +
+        "speed uses measured tok/s where available, otherwise heuristic estimates (from pricing and model family). " +
         "Returns a compact Markdown table (~250-500 tokens depending on limit).",
       annotations: {
         readOnlyHint: true,
@@ -53,9 +55,33 @@ export function registerListTopTool(
         min_release_date: isoDateSchema
           .optional()
           .describe("Minimum release date (YYYY-MM-DD). Excludes older models"),
+        max_input_price: z
+          .number()
+          .min(0)
+          .max(1_000_000)
+          .optional()
+          .describe("Maximum input price in USD per 1M tokens"),
+        max_output_price: z
+          .number()
+          .min(0)
+          .max(1_000_000)
+          .optional()
+          .describe("Maximum output price in USD per 1M tokens"),
+        require_vision: z
+          .boolean()
+          .optional()
+          .describe("Require vision/image input support"),
+        require_tools: z
+          .boolean()
+          .optional()
+          .describe("Require function/tool calling support"),
+        require_open_source: z
+          .boolean()
+          .optional()
+          .describe("Require open-source license"),
       },
     },
-    async ({ category, limit, min_context, min_release_date }) => {
+    async ({ category, limit, min_context, min_release_date, max_input_price, max_output_price, require_vision, require_tools, require_open_source }) => {
       const loadError = await ensureRegistryLoaded(registry);
       if (loadError) return loadError;
 
@@ -63,6 +89,11 @@ export function registerListTopTool(
       const models = registry.getTopModels(category, effectiveLimit, {
         minContext: min_context,
         minReleaseDate: min_release_date,
+        maxInputPrice: max_input_price,
+        maxOutputPrice: max_output_price,
+        requireVision: require_vision,
+        requireTools: require_tools,
+        requireOpenSource: require_open_source,
       });
 
       if (models.length === 0) {
@@ -119,6 +150,8 @@ function getKeyScoreExtractor(
           ["MMMU", fmtScore(m.benchmarks.mmmu)],
           ["MMB", fmtScore(m.benchmarks.mmBench)],
           ["OCR", fmtScore(m.benchmarks.ocrBench)],
+          ["AI2D", fmtScore(m.benchmarks.ai2d)],
+          ["MathVista", fmtScore(m.benchmarks.mathVista)],
         ]);
 
     case "general":
@@ -152,7 +185,13 @@ function getKeyScoreExtractor(
         );
 
     case "speed":
-      return (m) => `${fmtPrice(m.pricing.output)}/1M out (price proxy)`;
+      return (m) => {
+        const tokPerSec = m.speed.outputTokensPerSecond;
+        if (tokPerSec !== undefined) {
+          return `${tokPerSec} tok/s`;
+        }
+        return `${fmtPrice(m.pricing.output)}/1M out (price proxy)`;
+      };
 
     case "context-window":
       return (m) => fmtContext(m.capabilities.contextLength);
@@ -164,6 +203,13 @@ function getKeyScoreExtractor(
           ["MATH", fmtScore(m.benchmarks.math500)],
           ["AIME", fmtScore(m.benchmarks.aime2024)],
         ]);
+
+    case "quality":
+      return (m) => {
+        const overall = getOverallBenchmarkScore(m);
+        if (overall === undefined) return "n/a";
+        return `Quality ${fmtScore(overall)}`;
+      };
 
     default:
       return () => "n/a";

@@ -75,6 +75,17 @@ export interface BenchmarkScores {
   ocrBench?: number;
   ai2d?: number;
   mathVista?: number;
+
+  // Agentic (BFCL V4)
+  bfclV4Overall?: number;
+  bfclV4Agentic?: number;
+  bfclV4MultiTurn?: number;
+  bfclV4SingleTurn?: number;
+  bfclV4Cost?: number;
+
+  // Speed
+  outputTokensPerSecond?: number;
+  timeToFirstToken?: number;
 }
 
 export interface ModelCapabilities {
@@ -85,6 +96,14 @@ export interface ModelCapabilities {
   supportsTools: boolean;
   supportsStreaming: boolean;
   supportsReasoning: boolean;
+}
+
+/** Speed and latency data for a model. Undefined when no data is available. */
+export interface ModelSpeed {
+  /** Output tokens per second */
+  outputTokensPerSecond?: number;
+  /** Time to first token in seconds */
+  timeToFirstToken?: number;
 }
 
 export interface ModelMetadata {
@@ -100,6 +119,18 @@ export interface PercentileRanks {
   general?: number;
   vision?: number;
   costEfficiency?: number;
+  speed?: number;
+  agentic?: number;
+}
+
+/** Cost estimate for common usage patterns */
+export interface CostEstimate {
+  /** Cost for 10K input + 2K output tokens (typical prompt) */
+  typicalCall: number;
+  /** Cost for 100K input + 10K output tokens (large document) */
+  largeCall: number;
+  /** Monthly cost at 1000 typical calls per day */
+  monthlyActive: number;
 }
 
 export interface UnifiedModel {
@@ -114,6 +145,8 @@ export interface UnifiedModel {
   capabilities: ModelCapabilities;
   metadata: ModelMetadata;
   percentiles: PercentileRanks;
+  /** Speed/latency data (may be sparse) */
+  speed: ModelSpeed;
   /** ISO 8601 timestamp of last data update */
   lastUpdated: string;
 }
@@ -144,6 +177,7 @@ export const MODEL_CATEGORIES = [
   "speed",
   "context-window",
   "reasoning",
+  "quality",
 ] as const;
 
 export type ModelCategory = (typeof MODEL_CATEGORIES)[number];

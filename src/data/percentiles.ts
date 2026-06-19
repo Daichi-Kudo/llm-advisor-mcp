@@ -12,22 +12,48 @@ const INPUT_PRICE_WEIGHT = 0.75;
 const OUTPUT_PRICE_WEIGHT = 0.25;
 
 export function getBlendedTokenPrice(m: UnifiedModel): number {
-  return m.pricing.input * INPUT_PRICE_WEIGHT + m.pricing.output * OUTPUT_PRICE_WEIGHT;
+  const input = Number.isFinite(m.pricing.input) ? m.pricing.input : 0;
+  const output = Number.isFinite(m.pricing.output) ? m.pricing.output : 0;
+  return roundWeightedPrice(input * INPUT_PRICE_WEIGHT + output * OUTPUT_PRICE_WEIGHT);
+}
+
+function roundWeightedPrice(price: number): number {
+  // Weighted decimal prices can produce binary floating-point artifacts
+  // (e.g. 0.1 * 0.75 + 0.3 * 0.25 -> 0.15000000000000002).
+  // Keep meaningful precision while avoiding noisy downstream sorting/output.
+  return Number(price.toPrecision(15));
 }
 
 /**
- * Compute percentile ranks for all models across five categories.
+ * Compute percentile ranks for all models across seven categories.
  * Percentile = (number of models scoring lower / (total models with a score - 1)) * 100.
  * Models without relevant benchmarks get no percentile for that category.
  */
 export function computePercentiles(models: Map<string, UnifiedModel>): void {
   const all = Array.from(models.values());
 
+  // Clear any stale percentile values before recomputing
+  for (const m of all) {
+    m.percentiles.coding = undefined;
+    m.percentiles.math = undefined;
+    m.percentiles.general = undefined;
+    m.percentiles.vision = undefined;
+    m.percentiles.costEfficiency = undefined;
+    m.percentiles.speed = undefined;
+    m.percentiles.agentic = undefined;
+  }
+
   assignPercentile(all, "coding", (m) => getCompositeBenchmarkScore(m, "coding"));
   assignPercentile(all, "math", (m) => getCompositeBenchmarkScore(m, "math"));
   assignPercentile(all, "general", (m) => getCompositeBenchmarkScore(m, "general"));
   assignPercentile(all, "vision", (m) => getCompositeBenchmarkScore(m, "vision"));
   assignPercentile(all, "costEfficiency", getCostEfficiencyScore);
+
+  // Assign "speed" percentile based on output tokens/second
+  assignPercentile(all, "speed", (m) => m.speed.outputTokensPerSecond);
+
+  // Assign "agentic" percentile based on BFCL V4 overall score
+  assignPercentile(all, "agentic", (m) => m.benchmarks.bfclV4Overall);
 }
 
 // ============================================================
@@ -45,6 +71,12 @@ export function getCompositeBenchmarkScore(
 ): number | undefined {
   switch (category) {
     case "coding":
+      // Require at least one coding-specific benchmark (SWE-bench or Aider)
+      // to prevent a generic Arena-Elo-only model from getting a coding score
+      // and outranking models with actual coding benchmark data.
+      if (m.benchmarks.sweBenchVerified === undefined && m.benchmarks.aiderPolyglot === undefined) {
+        return undefined;
+      }
       return weightedAvg([
         [m.benchmarks.sweBenchVerified, 2],
         [m.benchmarks.aiderPolyglot, 2],
@@ -87,7 +119,7 @@ export function getCompositeBenchmarkScore(
 export function getCostEfficiencyScore(m: UnifiedModel): number | undefined {
   // Need at least one benchmark and a non-zero price
   const blendedPrice = getBlendedTokenPrice(m);
-  if (blendedPrice <= 0) return undefined;
+  if (!Number.isFinite(blendedPrice) || blendedPrice <= 0) return undefined;
 
   const perfScore = getOverallBenchmarkScore(m);
   if (perfScore === undefined) return undefined;
@@ -109,7 +141,7 @@ export function getOverallBenchmarkScore(m: UnifiedModel): number | undefined {
 // Helpers
 // ============================================================
 
-type PercentileCategory = "coding" | "math" | "general" | "vision" | "costEfficiency";
+type PercentileCategory = "coding" | "math" | "general" | "vision" | "costEfficiency" | "speed" | "agentic";
 
 function assignPercentile(
   models: UnifiedModel[],

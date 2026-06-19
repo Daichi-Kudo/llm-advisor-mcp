@@ -94,7 +94,8 @@ function transformModel(raw: OpenRouterResponse["data"][0]): UnifiedModel {
       request: normalizeOptionalPositiveNumber(raw.pricing.request),
       cacheRead: perTokenToPerMillion(raw.pricing.input_cache_read),
       cacheWrite: perTokenToPerMillion(raw.pricing.input_cache_write),
-      image: perTokenToPerMillion(raw.pricing.image),
+      // Image pricing is per-image, not per-token — keep as-is (no 1M multiplier)
+      image: normalizeOptionalPositiveNumber(raw.pricing.image),
       reasoning: perTokenToPerMillion(raw.pricing.internal_reasoning),
     },
     benchmarks: {},
@@ -111,17 +112,18 @@ function transformModel(raw: OpenRouterResponse["data"][0]): UnifiedModel {
       provider,
       family,
       isOpenSource: isOpenSource(raw.id),
-      releaseDate: raw.created
+      releaseDate: Number.isFinite(raw.created) && raw.created > 0
         ? new Date(raw.created * 1000).toISOString().split("T")[0]
         : undefined,
     },
     percentiles: {},
+    speed: {},
     lastUpdated: new Date().toISOString(),
   };
 }
 
 function normalizePositiveNumber(value: unknown): number {
-  return normalizeOptionalPositiveNumber(value) ?? 0;
+  return normalizeOptionalNonNegativeNumber(value) ?? 0;
 }
 
 function normalizeOptionalPositiveNumber(value: unknown): number | undefined {
@@ -129,9 +131,20 @@ function normalizeOptionalPositiveNumber(value: unknown): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
-function parsePerTokenPrice(value: string | undefined): number | undefined {
-  if (value === undefined || value.trim() === "") return undefined;
-  const n = Number(value.replace(/,/g, ""));
+/** Like normalizeOptionalPositiveNumber but preserves zero as a valid value. */
+function normalizeOptionalNonNegativeNumber(value: unknown): number | undefined {
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+}
+
+function parsePerTokenPrice(value: unknown): number | undefined {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value >= 0 ? value : undefined;
+  }
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const n = Number(trimmed.replace(/,/g, ""));
   return Number.isFinite(n) && n >= 0 ? n : undefined;
 }
 
@@ -155,10 +168,8 @@ const OPEN_SOURCE_PROVIDERS = new Set([
   "allenai",
   "cognitivecomputations",
   "databricks",
-  "inception",
   "internlm",
   "nousresearch",
-  "perplexity",
   "snowflake",
   "teknium",
   "tngtech",
@@ -173,6 +184,9 @@ const OPEN_SOURCE_PATTERNS = [
 const PROPRIETARY_PATTERNS = [
   /gemini/i,
   /grok-(?!1(?:$|[-/]))/i,
+  /inception/i,
+  /mistral-large/i,
+  /perplexity/i,
 ];
 
 export function isOpenSource(modelId: string): boolean {

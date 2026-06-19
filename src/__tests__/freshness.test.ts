@@ -1,7 +1,16 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { computeFreshnessBonus } from "../tools/recommend.js";
 
 describe("computeFreshnessBonus", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-19T12:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("returns 3 for models released within last 3 months", () => {
     const recent = new Date();
     recent.setDate(recent.getDate() - 30); // 30 days ago
@@ -31,5 +40,9 @@ describe("computeFreshnessBonus", () => {
 
   it("returns 0 for invalid date string", () => {
     expect(computeFreshnessBonus("not-a-date")).toBe(0);
+  });
+
+  it("returns 0 for future release dates", () => {
+    expect(computeFreshnessBonus("2026-06-20")).toBe(0);
   });
 });

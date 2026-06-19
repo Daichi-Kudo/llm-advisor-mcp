@@ -129,7 +129,12 @@ function formatComparison(
     ["MMLU-Pro", (m) => fmtScore(m.benchmarks.mmluPro)],
     ["GPQA Diamond", (m) => fmtScore(m.benchmarks.gpqaDiamond)],
     ["MATH-500", (m) => fmtScore(m.benchmarks.math500)],
+    ["AIME 2024", (m) => fmtScore(m.benchmarks.aime2024)],
     ["MMMU", (m) => fmtScore(m.benchmarks.mmmu)],
+    ["MMBench", (m) => fmtScore(m.benchmarks.mmBench)],
+    ["OCRBench", (m) => fmtScore(m.benchmarks.ocrBench)],
+    ["AI2D", (m) => fmtScore(m.benchmarks.ai2d)],
+    ["MathVista", (m) => fmtScore(m.benchmarks.mathVista)],
   ];
 
   for (const [label, extractor] of benchmarks) {
