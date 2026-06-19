@@ -18,6 +18,7 @@ export function registerCompareProvidersTool(
         `Compare pricing for the same model across different API providers (llm-advisor ${SERVER_VERSION}, MCP registry ${MCP_REGISTRY_NAME}). ` +
         "Shows input/output prices on OpenRouter, direct providers (OpenAI, Anthropic, Google), " +
         "and inference platforms (Bedrock, Groq, Together, Fireworks, DeepInfra, Cerebras). " +
+        "New models are auto-detected using known provider markup patterns and naming heuristics. " +
         "Highlights the cheapest provider for each price type. " +
         "Returns a compact Markdown table (~200-400 tokens).",
       annotations: {
@@ -59,16 +60,19 @@ export function registerCompareProvidersTool(
         };
       }
 
-      // Look up per-provider pricing
-      const allPricing = getPerProviderPricing();
-      const modelPricing = allPricing[found.id];
+      // Look up per-provider pricing (known + auto-estimated for all models)
+      const modelPricing = getPerProviderPricing(
+        found.id,
+        found.pricing.input,
+        found.pricing.output
+      );
 
       if (!modelPricing) {
         return {
           content: [
             {
               type: "text" as const,
-              text: `No per-provider pricing data available for "${found.id}". Only OpenRouter pricing is known ($${fmtPrice(found.pricing.input)} input, $${fmtPrice(found.pricing.output)} output per 1M tokens).`,
+              text: `"${found.id}" has zero pricing data and cannot be estimated.`,
             },
           ],
         };

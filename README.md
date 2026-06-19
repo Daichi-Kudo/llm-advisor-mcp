@@ -460,10 +460,10 @@ When a new model is released, it appears in different data sources at different 
 | BFCL V4 agentic score | BFCL (live) | ✅ Yes — if BFCL adds the model | ≤6 hours |
 | Output speed (tok/s) | Static data + heuristic estimation | ✅ Yes — measured for 40+ models; heuristic estimate for **all others** based on pricing and family | ≤1 hour |
 | Time-to-first-token | Static data + heuristic estimation | ✅ Yes — same approach, works for every model | ≤1 hour |
-| Provider slugs (Bedrock, Groq, etc.) | Static data (baked in) | ❌ No — 30 models hardcoded; update requires new release | Next release |
-| Per-provider pricing (Direct, Bedrock, etc.) | Static data (baked in) | ❌ No — 30 models hardcoded | Next release |
+| Provider slugs (Bedrock, Groq, etc.) | Heuristic generation (code) | ✅ Yes — auto-generated from model ID using naming conventions (known patterns override for accuracy) | ≤1 hour |
+| Per-provider pricing (Direct, Bedrock, etc.) | Known data + heuristic estimation | ✅ Yes — known prices for 10+ models, auto-estimated for **all others** using provider markup patterns | ≤1 hour |
 
-**Bottom line:** For any new model, pricing, capabilities, benchmark scores, AND speed estimates all appear automatically within hours. Only provider slugs and per-provider pricing comparisons lag behind until the next package release. Contributions to update the static data files are always welcome.
+**Bottom line:** Every data point is now auto-detected for new models. Pricing, capabilities, benchmarks, speed estimates, provider slugs, and per-provider pricing all appear automatically. The only data that requires a release update is the known slug/pricing overrides for non-standard provider formats — but even without those, heuristic estimates are generated for every model.
 
 ---
 

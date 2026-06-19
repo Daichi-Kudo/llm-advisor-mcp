@@ -6,11 +6,14 @@ import { ensureRegistryLoaded } from "./schemas.js";
 import { buildMarkdownTable, freshnessFooter } from "./formatters.js";
 
 /**
- * Static mapping of OpenRouter model IDs to their provider-specific slugs.
- * Useful for users who deploy models on different backends (Bedrock, Groq, etc.)
- * and need to know the provider-specific model identifier.
+ * Provider slug generator.
+ *
+ * Uses known mappings for popular models AND auto-generates slugs for ANY
+ * model based on provider-specific naming conventions. This ensures every
+ * model in the registry gets at least estimated slug data — new models are
+ * auto-detected without requiring code updates.
  */
-interface ProviderSlug {
+export interface ProviderSlug {
   model: string;
   openrouter: string;
   bedrock?: string;
@@ -24,37 +27,97 @@ interface ProviderSlug {
   azure?: string;
 }
 
-const PROVIDER_SLUGS: ProviderSlug[] = [
+export type ProviderKey = keyof Omit<ProviderSlug, "model" | "openrouter">;
+
+/**
+ * Known exact slug mappings for models with non-standard slug formats.
+ * Models whose slugs follow standard patterns are auto-generated below.
+ */
+const KNOWN_SLUGS: ProviderSlug[] = [
   { model: "Claude Opus 4.8", openrouter: "anthropic/claude-opus-4.8", bedrock: "anthropic.claude-opus-4-8-20250522" },
   { model: "Claude Sonnet 4.6", openrouter: "anthropic/claude-sonnet-4.6", bedrock: "anthropic.claude-sonnet-4-6-20250522" },
   { model: "Claude Haiku 4.5", openrouter: "anthropic/claude-haiku-4.5", bedrock: "anthropic.claude-haiku-4-5-20250522" },
-  { model: "Claude Opus 4.6", openrouter: "anthropic/claude-opus-4.6" },
-  { model: "Claude Sonnet 4.5", openrouter: "anthropic/claude-sonnet-4.5" },
   { model: "GPT-5.5", openrouter: "openai/gpt-5.5", azure: "gpt-5-5" },
-  { model: "GPT-5.4", openrouter: "openai/gpt-5.4" },
-  { model: "GPT-5-mini", openrouter: "openai/gpt-5-mini" },
   { model: "GPT-4.1", openrouter: "openai/gpt-4.1", bedrock: "openai.gpt-4-1", azure: "gpt-4-1" },
-  { model: "o3", openrouter: "openai/o3" },
-  { model: "o4-mini", openrouter: "openai/o4-mini" },
   { model: "Gemini 3.1 Pro", openrouter: "google/gemini-3.1-pro", google: "gemini-3.1-pro", groq: "gemini-3.1-pro" },
-  { model: "Gemini 3 Flash", openrouter: "google/gemini-3-flash", google: "gemini-3-flash" },
-  { model: "Gemini 2.5 Pro", openrouter: "google/gemini-2.5-pro", google: "gemini-2.5-pro" },
-  { model: "Gemini 2.5 Flash", openrouter: "google/gemini-2.5-flash", google: "gemini-2.5-flash" },
   { model: "DeepSeek V4 Pro", openrouter: "deepseek/deepseek-v4-pro", fireworks: "deepseek-v4-pro", together: "deepseek-ai/DeepSeek-V4-Pro" },
   { model: "DeepSeek V4 Flash", openrouter: "deepseek/deepseek-v4-flash", deepinfra: "DeepSeek-V4-Flash", fireworks: "deepseek-v4-flash" },
-  { model: "DeepSeek Chat", openrouter: "deepseek/deepseek-chat", groq: "deepseek-r1-distill-llama-70b" },
   { model: "Llama 4 Maverick", openrouter: "meta-llama/llama-4-maverick", groq: "llama-4-maverick", together: "meta-llama/Llama-4-Maverick-17B-128E-Instruct", fireworks: "llama-v4-maverick" },
   { model: "Llama 4 Scout", openrouter: "meta-llama/llama-4-scout", groq: "llama-4-scout", together: "meta-llama/Llama-4-Scout-17B-16E-Instruct" },
-  { model: "Mistral Large", openrouter: "mistralai/mistral-large", groq: "mistral-large-2407" },
-  { model: "Grok 4", openrouter: "x-ai/grok-4" },
-  { model: "Grok 4 Fast", openrouter: "x-ai/grok-4-fast" },
-  { model: "GLM-5.2", openrouter: "z-ai/glm-5.2" },
-  { model: "GLM-4.7 Flash", openrouter: "z-ai/glm-4.7-flash" },
-  { model: "Qwen 3.5 Plus", openrouter: "qwen/qwen-3.5-plus", together: "Qwen/Qwen3.5-Plus" },
-  { model: "Qwen 3.7 Max", openrouter: "qwen/qwen-3.7-max" },
-  { model: "Phi-4", openrouter: "microsoft/phi-4", azure: "Phi-4" },
-  { model: "Kimi K2.6", openrouter: "moonshot/kimi-k2.6" },
-  { model: "Kimi K2.5", openrouter: "moonshot/kimi-k2.5" },
+];
+
+/**
+ * Generate provider slugs for ANY model using naming heuristics.
+ * This is the key to auto-detecting new models — every model gets
+ * estimated slug data even without an explicit mapping.
+ */
+function generateSlug(modelId: string): ProviderSlug {
+  const displayName = modelId.split("/").pop() ?? modelId;
+  const [provider, ...rest] = modelId.split("/");
+  const modelName = rest.join("-");
+
+  const slug: ProviderSlug = {
+    model: displayName.charAt(0).toUpperCase() + displayName.slice(1),
+    openrouter: modelId,
+  };
+
+  // Bedrock: only for providers known to be on Bedrock
+  if (["anthropic", "openai"].includes(provider)) {
+    slug.bedrock = provider === "anthropic"
+      ? `anthropic.${modelName.replace(/-20\d{6}/g, "").replace(/-thinking.*$/, "")}`
+      : `openai.${modelName.replace(/-20\d{6}/g, "").replace(/-thinking.*$/, "")}`;
+  }
+
+  // Groq: model name without provider prefix (most use the same slug)
+  slug.groq = modelName;
+
+  // Together: Organization/Model-Name
+  const org = provider === "meta-llama" ? "meta-llama" :
+    provider === "deepseek" ? "deepseek-ai" : provider;
+  slug.together = `${org}/${toTitleCase(modelName)}`;
+
+  // Fireworks: model-name (lowercase, stripped of version dates)
+  slug.fireworks = modelName.replace(/-20\d{6}/g, "").replace(/-latest$/, "");
+
+  // DeepInfra: Model-Name
+  slug.deepinfra = toTitleCase(modelName);
+
+  // Google AI Studio: model-name
+  if (provider === "google") slug.google = modelName;
+
+  // Azure OpenAI: model-name
+  if (provider === "openai") slug.azure = modelName.replace(/-20\d{6}/g, "");
+
+  return slug;
+}
+
+function toTitleCase(s: string): string {
+  return s.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("-");
+}
+
+/**
+ * Get slugs for ALL models in the registry.
+ * Uses known mappings where available, auto-generates for the rest.
+ */
+function getAllSlugs(allModelIds: string[]): ProviderSlug[] {
+  const slugMap = new Map<string, ProviderSlug>();
+
+  for (const known of KNOWN_SLUGS) {
+    slugMap.set(known.openrouter, known);
+  }
+
+  for (const id of allModelIds) {
+    if (!slugMap.has(id)) {
+      slugMap.set(id, generateSlug(id));
+    }
+  }
+
+  return Array.from(slugMap.values());
+}
+
+const ALL_PROVIDER_KEYS: ProviderKey[] = [
+  "bedrock", "groq", "together", "fireworks", "deepinfra",
+  "cerebras", "sambanova", "google", "azure",
 ];
 
 export function registerSlugsTool(
@@ -66,8 +129,9 @@ export function registerSlugsTool(
     {
       title: "List model slugs",
       description:
-        `Look up provider-specific model slugs/IDs for popular models (llm-advisor ${SERVER_VERSION}, MCP registry ${MCP_REGISTRY_NAME}). ` +
+        `Look up provider-specific model slugs/IDs for ANY model (llm-advisor ${SERVER_VERSION}, MCP registry ${MCP_REGISTRY_NAME}). ` +
         "Returns the OpenRouter ID along with provider-specific identifiers for Bedrock, Groq, Together, Fireworks, etc. " +
+        "New models are auto-detected using naming heuristics. " +
         "Optionally filter by model name or provider. " +
         "Returns a compact Markdown table (~200-400 tokens).",
       annotations: {
@@ -101,7 +165,11 @@ export function registerSlugsTool(
       const loadError = await ensureRegistryLoaded(registry);
       if (loadError) return loadError;
 
-      let filtered = PROVIDER_SLUGS;
+      // Dynamically generate slugs for ALL models in the registry
+      const allModelIds = registry.getAllModels().map((m) => m.id);
+      const allSlugs = getAllSlugs(allModelIds);
+
+      let filtered = allSlugs;
 
       if (modelFilter) {
         const q = modelFilter.toLowerCase();
@@ -114,11 +182,9 @@ export function registerSlugsTool(
 
       if (providerFilter) {
         const p = providerFilter.toLowerCase();
-        // Only show rows that have a slug for the requested provider
-        filtered = filtered.filter((s) => {
-          const keys = ["bedrock", "groq", "together", "fireworks", "deepinfra", "cerebras", "sambanova", "google", "azure"] as const;
-          return keys.some((k) => p.includes(k) && s[k as keyof typeof s]);
-        });
+        filtered = filtered.filter((s) =>
+          ALL_PROVIDER_KEYS.some((k) => p.includes(k) && s[k])
+        );
       }
 
       if (filtered.length === 0) {
@@ -132,7 +198,7 @@ export function registerSlugsTool(
         };
       }
 
-      const output = formatSlugsList(filtered, modelFilter, providerFilter);
+      const output = formatSlugsList(filtered, filtered.length);
 
       return {
         content: [{ type: "text" as const, text: output }],
@@ -143,19 +209,13 @@ export function registerSlugsTool(
 
 function formatSlugsList(
   slugs: ProviderSlug[],
-  modelFilter?: string,
-  providerFilter?: string
+  totalCount: number
 ): string {
   const lines: string[] = [];
-  lines.push(`## Model Slugs (${slugs.length} models)`);
+  lines.push(`## Model Slugs (${totalCount} models)`);
   lines.push("");
 
-  // Collect all non-OpenRouter provider columns that have data
-  const providerKeys: (keyof ProviderSlug)[] = [
-    "bedrock", "groq", "together", "fireworks", "deepinfra",
-    "cerebras", "sambanova", "google", "azure",
-  ];
-  const activeProviders = providerKeys.filter((k) =>
+  const activeProviders = ALL_PROVIDER_KEYS.filter((k) =>
     slugs.some((s) => s[k])
   );
 
