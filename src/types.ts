@@ -168,6 +168,7 @@ export const MODEL_CATEGORIES = [
   "context-window",
   "reasoning",
   "quality",
+  "image-gen",
 ] as const;
 
 export type ModelCategory = (typeof MODEL_CATEGORIES)[number];

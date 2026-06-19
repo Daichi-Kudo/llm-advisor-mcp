@@ -166,6 +166,7 @@ function categoryToComposite(category: ModelCategory): CompositeScoreCategory | 
     case "cost-effective":
     case "speed":
     case "context-window":
+    case "image-gen":
       return undefined;
   }
 }

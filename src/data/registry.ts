@@ -273,6 +273,16 @@ export class ModelRegistry {
           (m) => getOverallBenchmarkScore(m)
         ));
 
+      case "image-gen":
+        return takeCloned(sortByComposite(
+          allModels.filter((m) => m.capabilities.outputModalities.includes("image")),
+          (m) => {
+            // Sort by image pricing if available (cheaper = better), then by features
+            if (m.pricing.image !== undefined) return -m.pricing.image;
+            return -m.pricing.output;
+          }
+        ));
+
       default:
         return takeCloned(sortByComposite(allModels, (m) => getCompositeBenchmarkScore(m, "general")));
     }

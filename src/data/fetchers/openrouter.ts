@@ -45,13 +45,18 @@ export async function fetchOpenRouterModels(
       .filter((m) => {
         const prompt = parsePerTokenPrice(m.pricing.prompt);
         const completion = parsePerTokenPrice(m.pricing.completion);
+        const imagePrice = normalizeOptionalPositiveNumber(m.pricing.image);
         if (prompt === undefined || completion === undefined) return false;
-        // Exclude free models (both prices 0), accepting either string or numeric upstream shapes.
-        if (prompt === 0 && completion === 0) return false;
-        // Exclude OpenRouter meta-models (virtual routing models with negative/invalid pricing)
-        if (m.id.startsWith("openrouter/")) return false;
         // Exclude models with negative pricing
         if (prompt < 0 || completion < 0) return false;
+        // Exclude OpenRouter meta-models (virtual routing models)
+        if (m.id.startsWith("openrouter/")) return false;
+        // Allow image-gen models (they have zero prompt/completion but non-zero image pricing)
+        if (prompt === 0 && completion === 0 && imagePrice !== undefined) {
+          return true; // image generation model
+        }
+        // Exclude free models (both prices 0)
+        if (prompt === 0 && completion === 0) return false;
         return true;
       })
       .map(transformModel);

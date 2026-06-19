@@ -22,7 +22,7 @@ export function registerListTopTool(
       title: "List top models",
       description:
         `List top-ranked LLM/VLM models for a category or single benchmark (llm-advisor ${SERVER_VERSION}, MCP registry ${MCP_REGISTRY_NAME}). ` +
-        "Categories: coding, math, vision, general, cost-effective, open-source, speed, context-window, reasoning, quality. " +
+        "Categories: coding, math, vision, general, cost-effective, open-source, speed, context-window, reasoning, quality, image-gen. " +
         "Use the benchmark parameter to rank by a specific test (e.g., swe_bench_verified, gpqa_diamond). " +
         "quality uses the Overall Quality Index (0-100 composite across all benchmarks). " +
         "speed uses measured tok/s where available, otherwise heuristic estimates (from pricing and model family). " +
@@ -273,6 +273,13 @@ function getKeyScoreExtractor(
         const overall = getOverallBenchmarkScore(m);
         if (overall === undefined) return "n/a";
         return `Quality ${fmtScore(overall)}`;
+      };
+
+    case "image-gen":
+      return (m) => {
+        const iPrice = m.pricing.image;
+        if (iPrice !== undefined) return `$${iPrice.toFixed(3)}/image`;
+        return `${fmtPrice(m.pricing.output)}/1M out`;
       };
 
     default:
