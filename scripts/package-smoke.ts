@@ -81,6 +81,19 @@ async function main(): Promise<void> {
     if (JSON.stringify(cliTools) !== JSON.stringify(expectedCliTools)) {
       throw new Error(`Unexpected CLI tools: ${cliTools.join(", ")}`);
     }
+    try {
+      execFileSync(cliBin, ["top", "not-a-category"], {
+        cwd: installDir,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      throw new Error("Expected installed CLI to reject an invalid category");
+    } catch (error) {
+      const stderr = getExecStderr(error);
+      if (!stderr.includes("category:")) {
+        throw new Error(`Expected CLI validation output, got: ${stderr}`);
+      }
+    }
 
     const client = new Client({ name: "llm-advisor-package-smoke", version: "0.0.0" });
     const transport = new StdioClientTransport({ command: bin, stderr: "pipe" });
@@ -128,4 +141,17 @@ function truncateStderr(stderr: string): string {
   const trimmed = stderr.trim();
   if (trimmed.length <= MAX_STDERR_CHARS) return trimmed;
   return `${trimmed.slice(0, MAX_STDERR_CHARS)}\n... truncated ${trimmed.length - MAX_STDERR_CHARS} chars`;
+}
+
+function getExecStderr(error: unknown): string {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "stderr" in error
+  ) {
+    const stderr = (error as { stderr?: unknown }).stderr;
+    if (Buffer.isBuffer(stderr)) return String(stderr);
+    if (typeof stderr === "string") return stderr;
+  }
+  return String(error);
 }
