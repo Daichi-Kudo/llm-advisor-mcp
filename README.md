@@ -77,6 +77,41 @@ That is it. No API keys, no `.env` files.
 
 ---
 
+## Standalone CLI
+
+The package also ships a terminal command for the same model-advisor functions. It does not require the MCP server to be installed in a client; it uses the same tool registration code in-process.
+
+```bash
+npx -y --package llm-advisor-mcp llm-advisor top coding --limit 5
+npx -y --package llm-advisor-mcp llm-advisor compare claude-sonnet gpt-5 gemini-pro
+npx -y --package llm-advisor-mcp llm-advisor estimate claude-sonnet --input-tokens 10000 --output-tokens 2000 --monthly-calls 30000
+```
+
+Install it when you want repeated local use:
+
+```bash
+npm install -g llm-advisor-mcp
+llm-advisor top coding --limit 5
+```
+
+For exact MCP calls, use `run` with the tool name and JSON arguments:
+
+```bash
+npx -y --package llm-advisor-mcp llm-advisor run list_top_models --json '{"category":"coding","limit":5,"require_tools":true}'
+```
+
+The old `llm-advisor-mcp` binary still starts the MCP server. The new `llm-advisor` binary runs as a standalone CLI.
+
+## Skill
+
+A Codex/OpenAI skill is included at `skills/llm-advisor`. It tells an agent to use MCP tools when they are installed, or fall back to the CLI:
+
+```bash
+npx -y --package llm-advisor-mcp llm-advisor run recommend_model --json '{"use_case":"coding","max_input_price":3,"require_tools":true}'
+```
+
+---
+
 ## Tools
 
 ### `get_model_info`

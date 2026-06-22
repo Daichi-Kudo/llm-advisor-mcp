@@ -47,6 +47,7 @@ async function main(): Promise<void> {
     });
 
     const bin = join(installDir, "node_modules", ".bin", "llm-advisor-mcp");
+    const cliBin = join(installDir, "node_modules", ".bin", "llm-advisor");
     const installedPackageRoot = join(installDir, "node_modules", "llm-advisor-mcp");
     const installedPackageJson = JSON.parse(
       readFileSync(join(installedPackageRoot, "package.json"), "utf8")
@@ -64,6 +65,19 @@ async function main(): Promise<void> {
     }
     if (!existsSync(join(installedPackageRoot, "CHANGELOG.md"))) {
       throw new Error("Packed package is missing CHANGELOG.md release history");
+    }
+    if (!existsSync(join(installedPackageRoot, "skills", "llm-advisor", "SKILL.md"))) {
+      throw new Error("Packed package is missing the llm-advisor skill");
+    }
+    const cliTools = execFileSync(cliBin, ["tools"], {
+      cwd: installDir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    for (const toolName of EXPECTED_TOOLS) {
+      if (!cliTools.includes(toolName)) {
+        throw new Error(`CLI tools output is missing ${toolName}`);
+      }
     }
 
     const client = new Client({ name: "llm-advisor-package-smoke", version: "0.0.0" });

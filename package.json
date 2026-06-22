@@ -8,16 +8,18 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "llm-advisor-mcp": "dist/index.js"
+    "llm-advisor-mcp": "dist/index.js",
+    "llm-advisor": "dist/cli.js"
   },
   "files": [
     "dist",
+    "skills",
     "server.json",
     "CHANGELOG.md"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "npm run typecheck && tsup src/index.ts --format esm --clean",
+    "build": "npm run typecheck && tsup src/index.ts src/cli.ts --format esm --clean",
     "dev": "tsx src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest watch",

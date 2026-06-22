@@ -1,0 +1,3 @@
+interface:
+  display_name: "LLM Advisor"
+  short_description: "Use current LLM prices, benchmarks, slugs, and recommendations"

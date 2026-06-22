@@ -4,18 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
-import { InMemoryCache } from "./data/cache.js";
-import { ModelRegistry } from "./data/registry.js";
-import { registerModelInfoTool } from "./tools/model-info.js";
-import { registerListTopTool } from "./tools/list-top.js";
-import { registerCompareTool } from "./tools/compare.js";
-import { registerRecommendTool } from "./tools/recommend.js";
-import { registerSearchTool } from "./tools/search.js";
-import { registerProvidersTool } from "./tools/providers.js";
-import { registerEstimateTool } from "./tools/estimate.js";
-import { registerNewModelsTool } from "./tools/new-models.js";
-import { registerSlugsTool } from "./tools/slugs.js";
-import { registerCompareProvidersTool } from "./tools/compare-providers.js";
+import { createRegistry, registerAllTools } from "./tools/catalog.js";
 import { SERVER_NAME, SERVER_VERSION } from "./metadata.js";
 
 const server = new McpServer({
@@ -23,24 +12,13 @@ const server = new McpServer({
   version: SERVER_VERSION,
 });
 
-const cache = new InMemoryCache();
-const registry = new ModelRegistry(cache);
+const registry = createRegistry();
 let shuttingDown = false;
 
 // Shared transport reference — set in main()
 let httpTransport: StreamableHTTPServerTransport | null = null;
 
-// Register tools
-registerModelInfoTool(server, registry);
-registerListTopTool(server, registry);
-registerCompareTool(server, registry);
-registerRecommendTool(server, registry);
-registerSearchTool(server, registry);
-registerProvidersTool(server, registry);
-registerEstimateTool(server, registry);
-registerNewModelsTool(server, registry);
-registerSlugsTool(server, registry);
-registerCompareProvidersTool(server, registry);
+registerAllTools(server, registry);
 
 // Graceful shutdown
 function installSignalHandler(signal: NodeJS.Signals, exitCode: number): void {
