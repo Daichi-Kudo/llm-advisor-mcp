@@ -30,19 +30,22 @@ async function main(): Promise<void> {
   if (!existsSync(distEntry) || statSync(distEntry).size < 1000) {
     throw new Error(`${distEntry} is missing or unexpectedly small. Run npm run build first.`);
   }
+  const installDir = mkdtempSync(join(tmpdir(), "llm-advisor-mcp-pack-"));
+  const npmCache = join(installDir, "npm-cache");
   const packJson = execFileSync("npm", ["pack", "--json"], {
     cwd: projectRoot,
+    env: { ...process.env, npm_config_cache: npmCache },
     encoding: "utf8",
     stdio: ["ignore", "pipe", "inherit"],
   });
   const packResult = JSON.parse(packJson) as { filename: string } | Array<{ filename: string }>;
   const [{ filename }] = Array.isArray(packResult) ? packResult : [packResult];
   const tarball = join(projectRoot, filename);
-  const installDir = mkdtempSync(join(tmpdir(), "llm-advisor-mcp-pack-"));
 
   try {
     execFileSync("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", tarball], {
       cwd: installDir,
+      env: { ...process.env, npm_config_cache: npmCache },
       stdio: "inherit",
     });
 
@@ -73,11 +76,10 @@ async function main(): Promise<void> {
       cwd: installDir,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
-    });
-    for (const toolName of EXPECTED_TOOLS) {
-      if (!cliTools.includes(toolName)) {
-        throw new Error(`CLI tools output is missing ${toolName}`);
-      }
+    }).trim().split(/\r?\n/).sort();
+    const expectedCliTools = [...EXPECTED_TOOLS].sort();
+    if (JSON.stringify(cliTools) !== JSON.stringify(expectedCliTools)) {
+      throw new Error(`Unexpected CLI tools: ${cliTools.join(", ")}`);
     }
 
     const client = new Client({ name: "llm-advisor-package-smoke", version: "0.0.0" });

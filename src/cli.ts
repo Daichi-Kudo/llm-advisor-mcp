@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { createRegistry, createToolHandlers, extractTextContent, TOOL_NAMES } from "./tools/catalog.js";
+import { z } from "zod";
 
 type Args = Record<string, unknown>;
 
@@ -93,6 +94,11 @@ async function main(): Promise<void> {
       process.exitCode = 2;
       return;
     }
+    if (error instanceof z.ZodError) {
+      console.error(formatZodError(error));
+      process.exitCode = 2;
+      return;
+    }
     throw error;
   }
 }
@@ -134,7 +140,8 @@ function parseCommandArgs(spec: CommandSpec, argv: string[]): Args {
       if (positional.length < 2 || positional.length > 5) {
         throw new CliError("`compare` needs 2-5 model names.");
       }
-      args[name] = positional;
+      args[name] = [...positional];
+      positional.length = 0;
       continue;
     }
 
@@ -181,6 +188,15 @@ function coerceValue(value: string): unknown {
   if (value === "false") return false;
   if (/^-?\d+(?:\.\d+)?$/.test(value)) return Number(value);
   return value;
+}
+
+function formatZodError(error: z.ZodError): string {
+  return error.issues
+    .map((issue) => {
+      const path = issue.path.join(".") || "input";
+      return `${path}: ${issue.message}`;
+    })
+    .join("\n");
 }
 
 async function printToolResult(
