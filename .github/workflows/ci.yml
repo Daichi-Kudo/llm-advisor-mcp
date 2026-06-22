@@ -1,5 +1,8 @@
 name: CI
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main, master]
@@ -11,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [18, 20, 22]
+        node-version: [20, 22]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,5 +22,17 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: npm
       - run: npm ci
+      - run: npm audit --audit-level=high
+        if: matrix.node-version == 22
+      - run: npm run typecheck
       - run: npm run build
       - run: npm test
+      - run: npm run smoke:mcp
+        env:
+          LLM_ADVISOR_MCP_SMOKE_LIVE: "0"
+      - run: npm run smoke:package
+        if: matrix.node-version == 22
+        env:
+          SKIP_BUILD: "1"
+      - run: npm run smoke
+        if: github.event_name == 'push' && matrix.node-version == 22

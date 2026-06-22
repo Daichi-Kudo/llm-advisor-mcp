@@ -9,3 +9,15 @@ tests
 *.tar.gz
 .env
 .mcpregistry_*
+coverage
+*.tgz
+*.tsbuildinfo
+*.log
+npm-debug.log*
+.env.local
+.env.*.local
+.DS_Store
+.vscode
+.idea
+.serena
+src/__tests__

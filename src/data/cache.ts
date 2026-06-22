@@ -7,22 +7,32 @@ export class InMemoryCache {
     const entry = this.store.get(key);
     if (!entry) return null;
     if (Date.now() - entry.fetchedAt > entry.ttl) {
-      this.store.delete(key);
       return null;
     }
-    return entry.data as T;
+    return cloneCachedData(entry.data) as T;
   }
 
   set<T>(key: string, data: T, ttl: number, source: string, etag?: string): void {
-    this.store.set(key, { data, fetchedAt: Date.now(), ttl, source, etag });
+    if (!Number.isFinite(ttl) || ttl <= 0) {
+      throw new Error(`Cache TTL must be a positive finite number for key ${key}`);
+    }
+    this.store.set(key, { data: cloneCachedData(data), fetchedAt: Date.now(), ttl, source, etag });
   }
 
-  /** Returns cached data even if stale, with a flag indicating staleness */
-  getStaleOrNull<T>(key: string): { data: T; stale: boolean } | null {
+  /** Returns cached data even if stale, with a flag indicating staleness. */
+  getStaleOrNull<T>(
+    key: string,
+    maxStaleMs?: number
+  ): { data: T; stale: boolean } | null {
     const entry = this.store.get(key);
     if (!entry) return null;
-    const stale = Date.now() - entry.fetchedAt > entry.ttl;
-    return { data: entry.data as T, stale };
+    const ageMs = Date.now() - entry.fetchedAt;
+    const stale = ageMs > entry.ttl;
+    if (maxStaleMs !== undefined && (!Number.isFinite(maxStaleMs) || maxStaleMs < 0)) {
+      throw new Error(`maxStaleMs must be a non-negative finite number for key ${key}`);
+    }
+    if (maxStaleMs !== undefined && ageMs > maxStaleMs) return null;
+    return { data: cloneCachedData(entry.data) as T, stale };
   }
 
   /** Get the fetchedAt timestamp for a cache key */
@@ -32,7 +42,28 @@ export class InMemoryCache {
     return { fetchedAt: entry.fetchedAt, ttl: entry.ttl };
   }
 
+  /** Get the oldest freshness timestamp across cache keys, for mixed-source outputs. */
+  getOldestFreshnessInfo(keys: string[]): { fetchedAt: number; ttl: number } | null {
+    let oldest: { fetchedAt: number; ttl: number } | null = null;
+    for (const key of keys) {
+      const info = this.getFreshnessInfo(key);
+      if (!info) continue;
+      if (!oldest || info.fetchedAt < oldest.fetchedAt) oldest = info;
+    }
+    return oldest;
+  }
+
   clear(): void {
     this.store.clear();
+  }
+}
+
+function cloneCachedData<T>(data: T): T {
+  try {
+    return structuredClone(data);
+  } catch (error) {
+    throw new Error(
+      `Cached data must be structured-cloneable: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }

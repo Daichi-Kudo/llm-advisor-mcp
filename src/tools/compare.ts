@@ -2,27 +2,41 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { ModelRegistry } from "../data/registry.js";
 import type { UnifiedModel } from "../types.js";
-import { fmtPrice, fmtContext, fmtScore, fmtElo, freshnessFooter } from "./formatters.js";
+import { fmtPrice, fmtContext, fmtScore, fmtElo, freshnessFooter, escapeMarkdownCell, escapeMarkdownInline, escapeMarkdownTableInline } from "./formatters.js";
+import { getCompositeBenchmarkScore } from "../data/percentiles.js";
+import { MCP_REGISTRY_NAME, SERVER_VERSION } from "../metadata.js";
+import { ensureRegistryLoaded } from "./schemas.js";
 
 export function registerCompareTool(
   server: McpServer,
   registry: ModelRegistry
 ): void {
-  server.tool(
+  server.registerTool(
     "compare_models",
-    "Compare 2-5 LLM/VLM models side-by-side: pricing, benchmarks, capabilities. " +
-      "Returns a compact Markdown comparison table (~400 tokens).",
     {
-      models: z
-        .array(z.string())
-        .min(2)
-        .max(5)
-        .describe(
-          'Model IDs or partial names (e.g., ["claude-sonnet-4.6", "gpt-5.2", "gemini-3-pro"])'
-        ),
+      title: "Compare models",
+      description:
+        `Compare 2-5 LLM/VLM models side-by-side using llm-advisor ${SERVER_VERSION} (MCP registry ${MCP_REGISTRY_NAME}): pricing, benchmarks, capabilities. ` +
+        "Returns a compact Markdown comparison table (~400-700 tokens depending on model count).",
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+      inputSchema: {
+        models: z
+          .array(z.string().trim().min(1).max(500))
+          .min(2)
+          .max(5)
+          .describe(
+            'Model IDs or partial names (e.g., ["claude-sonnet-4.6", "gpt-5.2", "gemini-3-pro"])'
+          ),
+      },
     },
     async ({ models: modelQueries }) => {
-      await registry.ensureLoaded();
+      const loadError = await ensureRegistryLoaded(registry);
+      if (loadError) return loadError;
 
       const resolved: UnifiedModel[] = [];
       const notFound: string[] = [];
@@ -45,13 +59,12 @@ export function registerCompareTool(
             {
               type: "text" as const,
               text:
-                `Need at least 2 models to compare. Not found: ${notFound.join(", ")}.` +
+                `Need at least 2 models to compare. Not found: ${notFound.map(escapeMarkdownInline).join(", ")}.` +
                 (similar.length > 0
-                  ? ` Did you mean: ${similar.join(", ")}?`
+                  ? ` Did you mean: ${similar.map(escapeMarkdownInline).join(", ")}?`
                   : ""),
             },
           ],
-          isError: true,
         };
       }
 
@@ -74,12 +87,12 @@ function formatComparison(
 
   lines.push(`## Model Comparison (${models.length} models)`);
   if (notFound.length > 0) {
-    lines.push(`\n> Not found: ${notFound.join(", ")}`);
+    lines.push(`\n> ⚠️ Not found: ${notFound.map(escapeMarkdownInline).join(", ")}`);
   }
   lines.push("");
 
   // Header row: Feature | Model1 | Model2 | ...
-  const header = `| | ${models.map((m) => `**${m.id}**`).join(" | ")} |`;
+  const header = `| | ${models.map((m) => `**${escapeMarkdownTableInline(m.id)}**`).join(" | ")} |`;
   const sep = `|------|${models.map(() => "------").join("|")}|`;
 
   const rows: string[] = [];
@@ -106,20 +119,32 @@ function formatComparison(
 
   // Benchmarks — only show rows where at least one model has data
   const benchmarks: [string, (m: UnifiedModel) => string][] = [
+    ["Coding Composite", (m) => fmtScore(getCompositeBenchmarkScore(m, "coding"))],
+    ["General Composite", (m) => fmtScore(getCompositeBenchmarkScore(m, "general"))],
+    ["Math Composite", (m) => fmtScore(getCompositeBenchmarkScore(m, "math"))],
+    ["Vision Composite", (m) => fmtScore(getCompositeBenchmarkScore(m, "vision"))],
     ["SWE-bench", (m) => fmtScore(m.benchmarks.sweBenchVerified)],
     ["Aider Polyglot", (m) => fmtScore(m.benchmarks.aiderPolyglot)],
     ["Arena Elo", (m) => fmtElo(m.benchmarks.arenaElo)],
     ["MMLU-Pro", (m) => fmtScore(m.benchmarks.mmluPro)],
     ["GPQA Diamond", (m) => fmtScore(m.benchmarks.gpqaDiamond)],
     ["MATH-500", (m) => fmtScore(m.benchmarks.math500)],
+    ["AIME 2024", (m) => fmtScore(m.benchmarks.aime2024)],
     ["MMMU", (m) => fmtScore(m.benchmarks.mmmu)],
+    ["MMBench", (m) => fmtScore(m.benchmarks.mmBench)],
+    ["OCRBench", (m) => fmtScore(m.benchmarks.ocrBench)],
+    ["AI2D", (m) => fmtScore(m.benchmarks.ai2d)],
+    ["MathVista", (m) => fmtScore(m.benchmarks.mathVista)],
+    ["BFCL V4", (m) => fmtScore(m.benchmarks.bfclV4Overall)],
+    ["Output Speed", (m) => m.benchmarks.outputTokensPerSecond !== undefined ? `${m.benchmarks.outputTokensPerSecond} tok/s` : "n/a"],
+    ["TTFT", (m) => m.benchmarks.timeToFirstToken !== undefined ? `${m.benchmarks.timeToFirstToken.toFixed(2)}s` : "n/a"],
   ];
 
   for (const [label, extractor] of benchmarks) {
     const values = models.map(extractor);
     if (values.some((v) => v !== "n/a")) {
-      // Bold the best value
-      rows.push(row(label, highlightBest(values)));
+      const comparableCount = values.filter((v) => numericValue(v) !== undefined).length;
+      rows.push(row(label, comparableCount >= 2 ? highlightBest(values) : values));
     }
   }
 
@@ -157,17 +182,21 @@ function formatComparison(
 }
 
 function row(label: string, values: string[]): string {
-  return `| ${label} | ${values.join(" | ")} |`;
+  return `| ${escapeMarkdownCell(label)} | ${values.map(escapeMarkdownCell).join(" | ")} |`;
 }
 
 /** Bold the best (highest) numeric value in the array */
 function highlightBest(values: string[]): string[] {
-  const nums = values.map((v) => {
-    const n = parseFloat(v.replace(/[^0-9.\-]/g, ""));
-    return isNaN(n) ? -Infinity : n;
-  });
+  const nums = values.map((v) => numericValue(v) ?? -Infinity);
   const max = Math.max(...nums);
   if (max === -Infinity) return values;
 
   return values.map((v, i) => (nums[i] === max && v !== "n/a" ? `**${v}**` : v));
+}
+
+function numericValue(value: string): number | undefined {
+  const match = value.match(/-?\d+(?:\.\d+)?/);
+  if (!match) return undefined;
+  const n = Number(match[0]);
+  return Number.isFinite(n) ? n : undefined;
 }

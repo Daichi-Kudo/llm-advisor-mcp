@@ -5,6 +5,8 @@ import {
   fmtScore,
   fmtElo,
   fmtModalities,
+  escapeMarkdownInline,
+  freshnessFooter,
   buildMarkdownTable,
   formatModelDetail,
 } from "../tools/formatters.js";
@@ -13,14 +15,41 @@ import type { UnifiedModel } from "../types.js";
 describe("fmtPrice", () => {
   it("formats zero as 'free'", () => expect(fmtPrice(0)).toBe("free"));
   it("formats undefined as 'n/a'", () => expect(fmtPrice(undefined)).toBe("n/a"));
+  it("formats null as 'n/a'", () => expect(fmtPrice(null as unknown as undefined)).toBe("n/a"));
+  it("formats non-finite prices as 'n/a'", () => {
+    expect(fmtPrice(NaN)).toBe("n/a");
+    expect(fmtPrice(Infinity)).toBe("n/a");
+  });
+  it("formats negative prices as 'n/a'", () => expect(fmtPrice(-0.01)).toBe("n/a"));
+  it("does not round very small non-zero prices to free-looking zeroes", () => expect(fmtPrice(0.00003)).toBe("$0.00003"));
+  it("formats tiny prices without misleading trailing zeroes", () => {
+    expect(fmtPrice(0.00001)).toBe("$0.00001");
+    expect(fmtPrice(0.0000999)).toBe("$0.0000999");
+    expect(fmtPrice(0.0000001)).toBe("$0.0000001");
+    expect(fmtPrice(0.0000000000123)).toBe("< $0.0000000001");
+  });
   it("formats small prices with 4 decimals", () => expect(fmtPrice(0.005)).toBe("$0.0050"));
+  it("rounds sub-cent prices up without dropping the cent boundary", () => expect(fmtPrice(0.009999)).toBe("$0.0100"));
   it("formats normal prices with 2 decimals", () => expect(fmtPrice(3.0)).toBe("$3.00"));
+  it("formats very large prices without scientific notation", () => expect(fmtPrice(999999)).toBe("$999999.00"));
+});
+
+describe("escapeMarkdownInline", () => {
+  it("escapes inline Markdown control characters and collapses newlines", () => {
+    expect(escapeMarkdownInline("model_[x](y)#1~~\nnext")).toBe("model\\_\\[x\\]\\(y\\)\\#1\\~\\~ next");
+  });
+
+  it("escapes HTML-sensitive inline Markdown characters", () => {
+    expect(escapeMarkdownInline("<script>&'\"")).toBe("&lt;script&gt;&amp;&apos;&quot;");
+  });
 });
 
 describe("fmtContext", () => {
   it("formats millions", () => expect(fmtContext(1_000_000)).toBe("1M"));
+  it("floors non-round millions instead of overstating context", () => expect(fmtContext(1_999_999)).toBe("1.9M"));
   it("formats thousands", () => expect(fmtContext(128_000)).toBe("128K"));
   it("formats small numbers", () => expect(fmtContext(512)).toBe("512"));
+  it("formats zero explicitly", () => expect(fmtContext(0)).toBe("0"));
   it("handles undefined", () => expect(fmtContext(undefined)).toBe("n/a"));
 });
 
@@ -52,6 +81,34 @@ describe("buildMarkdownTable", () => {
     const table = buildMarkdownTable(["X"], rows, 10);
     expect(table).toContain("+5 more");
   });
+
+  it("escapes Markdown table separators in cells", () => {
+    const table = buildMarkdownTable(["A|B", "C"], [["x|y", "z\nq"]]);
+    expect(table).toContain("A\\|B");
+    expect(table).toContain("x\\|y");
+    expect(table).toContain("z q");
+  });
+
+  it("skips short rows and trims extra cells", () => {
+    const table = buildMarkdownTable(["A", "B"], [["short"], ["1", "2", "extra"]]);
+    expect(table).not.toContain("short");
+    expect(table).toContain("| 1 | 2 |");
+    expect(table).not.toContain("extra");
+  });
+});
+
+describe("freshnessFooter", () => {
+  it("formats millisecond epoch timestamps as UTC ISO strings", () => {
+    const realNow = Date.now;
+    Date.now = () => Date.parse("2026-06-19T12:35:00Z");
+    try {
+      expect(freshnessFooter(Date.parse("2026-06-19T12:05:00Z"))).toBe(
+        "\n**Data freshness**: 2026-06-19T12:05:00Z (30min ago)"
+      );
+    } finally {
+      Date.now = realNow;
+    }
+  });
 });
 
 describe("formatModelDetail", () => {
@@ -76,6 +133,7 @@ describe("formatModelDetail", () => {
         isOpenSource: false,
       },
       percentiles: { coding: 95, general: 98 },
+      speed: {},
       lastUpdated: new Date().toISOString(),
       ...overrides,
     };
@@ -83,7 +141,17 @@ describe("formatModelDetail", () => {
 
   it("includes model ID as heading", () => {
     const output = formatModelDetail(makeModel());
-    expect(output).toContain("## anthropic/claude-opus-4.6");
+    expect(output).toContain("## anthropic/claude\\-opus\\-4\\.6");
+  });
+
+  it("escapes external Markdown in headings and metadata", () => {
+    const output = formatModelDetail(makeModel({
+      id: "provider/model_[x](y)#1",
+      metadata: { provider: "provider_[x](y)#1", family: "test", isOpenSource: false },
+    }));
+
+    expect(output).toContain("## provider/model\\_\\[x\\]\\(y\\)\\#1");
+    expect(output).toContain("**Provider**: provider\\_\\[x\\]\\(y\\)\\#1");
   });
 
   it("shows pricing section", () => {

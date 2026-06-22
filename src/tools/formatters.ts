@@ -9,42 +9,64 @@ export function buildMarkdownTable(
   const truncated = rows.length > maxRows;
   const displayRows = rows.slice(0, maxRows);
 
-  const headerLine = `| ${headers.join(" | ")} |`;
+  const safeHeaders = headers.map(escapeMarkdownCell);
+  const safeRows = displayRows
+    .filter((row) => row.length >= headers.length)
+    .map((row) => row.slice(0, headers.length).map(escapeMarkdownCell));
+
+  const headerLine = `| ${safeHeaders.join(" | ")} |`;
   const separatorLine = `|${headers.map(() => "------").join("|")}|`;
-  const dataLines = displayRows.map((row) => `| ${row.join(" | ")} |`);
+  const dataLines = safeRows.map((row) => `| ${row.join(" | ")} |`);
 
   let table = [headerLine, separatorLine, ...dataLines].join("\n");
   if (truncated) {
-    table += `\n| ... | +${rows.length - maxRows} more ||`;
+    table += `\n\n> +${rows.length - maxRows} more rows`;
   }
   return table;
 }
 
+export function escapeMarkdownCell(value: string): string {
+  return value.replace(/\|/g, "\\|").replace(/[\r\n]+/g, " ");
+}
+
+export function escapeMarkdownInline(value: string): string {
+  return value
+    .replace(/[&<>"'\\`*_{}\[\]()#+.!~-]/g, (char) => HTML_ENTITIES[char] ?? `\\${char}`)
+    .replace(/[\r\n]+/g, " ");
+}
+
 /** Format price as "$X.XX" or "free" */
 export function fmtPrice(price: number | undefined): string {
-  if (price === undefined || price === null) return "n/a";
+  if (price === undefined || price === null || !Number.isFinite(price) || price < 0) return "n/a";
   if (price === 0) return "free";
+  if (price < 0.0001) {
+    const fixed = price.toFixed(10).replace(/\.?0+$/, "");
+    return fixed === "0" ? "< $0.0000000001" : `$${fixed}`;
+  }
   if (price < 0.01) return `$${price.toFixed(4)}`;
   return `$${price.toFixed(2)}`;
 }
 
 /** Format large context lengths: 128000 → "128K", 1000000 → "1M" */
 export function fmtContext(tokens: number | undefined): string {
-  if (!tokens) return "n/a";
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(tokens % 1_000_000 === 0 ? 0 : 1)}M`;
+  if (tokens === undefined || tokens === null || !Number.isFinite(tokens) || tokens < 0) return "n/a";
+  if (tokens >= 1_000_000) {
+    if (tokens % 1_000_000 === 0) return `${tokens / 1_000_000}M`;
+    return `${Math.floor(tokens / 100_000) / 10}M`;
+  }
   if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}K`;
   return String(tokens);
 }
 
 /** Format benchmark score: 72.1 → "72.1%" or "n/a" */
 export function fmtScore(score: number | undefined): string {
-  if (score === undefined || score === null) return "n/a";
+  if (score === undefined || score === null || !Number.isFinite(score)) return "n/a";
   return `${score.toFixed(1)}%`;
 }
 
 /** Format Elo rating */
 export function fmtElo(elo: number | undefined): string {
-  if (elo === undefined || elo === null) return "n/a";
+  if (elo === undefined || elo === null || !Number.isFinite(elo)) return "n/a";
   return String(Math.round(elo));
 }
 
@@ -53,9 +75,21 @@ export function fmtModalities(mods: string[]): string {
   return mods.join("+") || "text";
 }
 
+export function escapeMarkdownTableInline(value: string): string {
+  return escapeMarkdownCell(escapeMarkdownInline(value));
+}
+
+const HTML_ENTITIES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&apos;",
+};
+
 /** Data freshness footer */
 export function freshnessFooter(fetchedAt?: number): string {
-  if (!fetchedAt) return "";
+  if (fetchedAt === undefined || !Number.isFinite(fetchedAt) || fetchedAt <= 0) return "";
   const date = new Date(fetchedAt).toISOString().replace(/\.\d{3}Z$/, "Z");
   const ageMin = Math.round((Date.now() - fetchedAt) / 60_000);
   return `\n**Data freshness**: ${date} (${ageMin}min ago)`;
@@ -65,11 +99,11 @@ export function freshnessFooter(fetchedAt?: number): string {
 export function formatModelDetail(model: UnifiedModel, fetchedAt?: number): string {
   const lines: string[] = [];
 
-  lines.push(`## ${model.id}`);
+  lines.push(`## ${escapeMarkdownInline(model.id)}`);
   lines.push("");
   const metaParts = [
-    `**Provider**: ${model.metadata.provider}`,
-    `**Modality**: ${fmtModalities(model.capabilities.inputModalities)}→${fmtModalities(model.capabilities.outputModalities)}`,
+    `**Provider**: ${escapeMarkdownInline(model.metadata.provider)}`,
+    `**Modality**: ${escapeMarkdownInline(fmtModalities(model.capabilities.inputModalities))}→${escapeMarkdownInline(fmtModalities(model.capabilities.outputModalities))}`,
   ];
   if (model.metadata.releaseDate) {
     metaParts.push(`**Released**: ${model.metadata.releaseDate}`);
@@ -89,17 +123,26 @@ export function formatModelDetail(model: UnifiedModel, fetchedAt?: number): stri
   if (model.pricing.cacheRead !== undefined) {
     lines.push(`| Cache Read | ${fmtPrice(model.pricing.cacheRead)} /1M tok |`);
   }
+  if (model.pricing.cacheWrite !== undefined) {
+    lines.push(`| Cache Write | ${fmtPrice(model.pricing.cacheWrite)} /1M tok |`);
+  }
   if (model.pricing.reasoning !== undefined) {
     lines.push(`| Reasoning | ${fmtPrice(model.pricing.reasoning)} /1M tok |`);
   }
+  if (model.pricing.request !== undefined) {
+    lines.push(`| Request | ${fmtPrice(model.pricing.request)} /request |`);
+  }
+  if (model.pricing.image !== undefined) {
+    lines.push(`| Image | ${fmtPrice(model.pricing.image)} /image |`);
+  }
   lines.push(`| Context | ${fmtContext(model.capabilities.contextLength)} |`);
-  if (model.capabilities.maxOutputTokens) {
+  if (model.capabilities.maxOutputTokens !== undefined) {
     lines.push(`| Max Output | ${fmtContext(model.capabilities.maxOutputTokens)} |`);
   }
 
   // Benchmarks (only non-null)
   const benchEntries = Object.entries(model.benchmarks).filter(
-    ([, v]) => v !== undefined && v !== null
+    (entry): entry is [string, number] => entry[1] !== undefined && entry[1] !== null
   );
   if (benchEntries.length > 0) {
     lines.push("");
@@ -108,7 +151,7 @@ export function formatModelDetail(model: UnifiedModel, fetchedAt?: number): stri
     lines.push("|-----------|-------|");
     for (const [key, value] of benchEntries) {
       const label = benchmarkLabel(key);
-      const formatted = key === "arenaElo" ? fmtElo(value as number) : fmtScore(value as number);
+      const formatted = key === "arenaElo" ? fmtElo(value) : fmtScore(value);
       lines.push(`| ${label} | ${formatted} |`);
     }
   }
@@ -157,7 +200,7 @@ export function formatTopList(
   const headers = ["#", "Model", "Key Score", "Input $/1M", "Output $/1M", "Context", "Released"];
   const rows = models.slice(0, limit).map((m, i) => [
     String(i + 1),
-    m.id,
+    escapeMarkdownTableInline(m.id),
     keyScoreExtractor(m),
     fmtPrice(m.pricing.input),
     fmtPrice(m.pricing.output),
@@ -175,8 +218,6 @@ export function formatTopList(
 function benchmarkLabel(key: string): string {
   const labels: Record<string, string> = {
     sweBenchVerified: "SWE-bench Verified",
-    sweBenchLite: "SWE-bench Lite",
-    humanEval: "HumanEval",
     aiderPolyglot: "Aider Polyglot",
     arenaElo: "Arena Elo",
     mmluPro: "MMLU-Pro",
@@ -188,6 +229,13 @@ function benchmarkLabel(key: string): string {
     ocrBench: "OCRBench",
     ai2d: "AI2D",
     mathVista: "MathVista",
+    bfclV4Overall: "BFCL V4 Overall",
+    bfclV4Agentic: "BFCL V4 Agentic",
+    bfclV4MultiTurn: "BFCL V4 Multi-Turn",
+    bfclV4SingleTurn: "BFCL V4 Single-Turn",
+    bfclV4Cost: "BFCL V4 Cost",
+    outputTokensPerSecond: "Output Speed",
+    timeToFirstToken: "Time to First Token",
   };
   return labels[key] ?? key;
 }
@@ -200,6 +248,8 @@ function percentileLabel(key: string): string {
     general: "General",
     vision: "Vision",
     costEfficiency: "Cost Efficiency",
+    speed: "Speed",
+    agentic: "Agentic",
   };
   return labels[key] ?? key;
 }

@@ -4,34 +4,20 @@
 [![npm downloads](https://img.shields.io/npm/dm/llm-advisor-mcp)](https://www.npmjs.com/package/llm-advisor-mcp)
 [![CI](https://github.com/Daichi-Kudo/llm-advisor-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/Daichi-Kudo/llm-advisor-mcp/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js >= 18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org/)
+[![Node.js >= 20.19](https://img.shields.io/badge/node-%3E%3D20.19-brightgreen)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
 [![Glama MCP server](https://glama.ai/mcp/servers/Daichi-Kudo/llm-advisor-mcp/badge)](https://glama.ai/mcp/servers/Daichi-Kudo/llm-advisor-mcp)
 
-[English](README.md) | **日本語**
+[English](README.md) | **日本語** | [中文](README.zh.md)
 
-**AIアシスタントにLLM/VLMの最新データを与えるMCPサーバー。**
+**AIアシスタントにLLM/VLMのリアルタイム知識を与えます。** 価格、ベンチマーク、レコメンドを毎時間更新します（データ鮮度は上流ソースに依存）。学習サイクルを待つ必要はありません。
 
-LLMには知識カットオフがある。「今一番いいコーディングモデルは？」と聞いても、最新データでは答えられない。このMCPがリアルタイムの価格・ベンチマーク・性能データを直接提供することで、その問題を解決する。
+LLMには知識カットオフがある。Claudeに「今一番いいコーディングモデルは？」と聞いても、最新データでは答えられない。このMCPサーバーは、ライブなモデル情報をAIアシスタントのコンテキストへ直接渡すことで、その問題を解決する。
 
-**APIキー不要。無料。オープンソース。**
-
-```
-あなた: 「コーディングに最適なモデルは？」
-Claude: [llm-advisor-mcp から最新データを取得]
-       → 「SWE-benchスコアと価格を考慮すると、現時点では...」
-```
-
-### 既存MCPとの違い
-
-| 特徴 | llm-advisor-mcp | 一般的なMCP |
-|------|-----------------|-------------|
-| トークン消費 | ~300トークン（Markdownテーブル） | ~3,000トークン（生JSON） |
-| ベンチマーク | 5ソース統合（SWE-bench, Arena Elo, VLM, Aider） | 単一ソース |
-| レコメンド | ユースケース+予算+要件→Top3 | なし |
-| モデル比較 | 2-5モデル横並び、最優値ハイライト | なし |
-| セットアップ | ゼロ設定（APIキー不要） | APIキー必要な場合あり |
+- **ゼロ設定** — APIキーも登録も不要。1コマンドでインストール。
+- **低トークン** — 生JSON（約3,000トークン）ではなく、コンパクトなMarkdownテーブル（約300トークン）。コンテキストウィンドウを節約。
+- **7+のライブデータソース** — OpenRouterの価格/メタデータ、SWE-bench、LM Arena Elo、OpenCompass VLM、Aider Polyglot、BFCL V4エージェントベンチマーク、静的スピード/レイテンシデータを統合ビューに集約。
 
 ---
 
@@ -41,10 +27,13 @@ Claude: [llm-advisor-mcp から最新データを取得]
 - **「Claude vs GPT vs Gemini を比較して」** — `compare_models` で横並び比較
 - **「1Mコンテキストで安いモデルを探して」** — `recommend_model` で予算制約付き推薦
 - **「このモデルのベンチマークは？」** — `get_model_info` でパーセンタイルランク付き詳細取得
+- **「$2/1M以下のビジョンモデルを探して」** — `search_models` で自然言語検索
+- **「Anthropicはどんなモデルがある？」** — `list_providers` でプロバイダ別表示
+- **「100Kコールのコストは？」** — `estimate_cost` で月間見積もり
 
 ---
 
-## インストール
+## クイックスタート
 
 ### Claude Code
 
@@ -73,7 +62,7 @@ MCP設定ファイルに以下を追加する:
 }
 ```
 
-30秒で完了。追加後すぐに使える。
+これだけです。APIキーも `.env` ファイルも不要。
 
 ### 対応クライアント
 
@@ -87,276 +76,251 @@ MCP設定ファイルに以下を追加する:
 
 ---
 
-## ツール一覧
+## ツール
 
-### 1. `get_model_info` — モデル詳細情報
+### `get_model_info`
 
-特定モデルの価格・ベンチマーク・パーセンタイルランク・機能・APIコード例を取得する。
+特定モデルの詳細仕様を取得する: 価格、ベンチマーク、パーセンタイルランク、機能、すぐ使えるAPIコード例、コスト見積もり。
 
-**パラメータ:**
+**パラメータ**
 
-| 名前 | 型 | 必須 | 説明 |
-|------|------|------|------|
-| `model` | string | Yes | モデルIDまたは部分名（例: `"claude-sonnet-4.6"`, `"gpt-5.2"`） |
-| `include_api_example` | boolean | No | APIコード例を含める（デフォルト: true） |
-| `api_format` | string | No | `openai_sdk` / `curl` / `python_requests`（デフォルト: `openai_sdk`） |
+| 名前 | 型 | 必須 | デフォルト | 説明 |
+|------|------|------|------------|------|
+| `model` | string | Yes | — | モデルIDまたは部分名（例: `"claude-sonnet-4"`, `"gpt-5"`） |
+| `include_api_example` | boolean | No | `true` | すぐ使えるコード例を含める |
+| `api_format` | enum | No | `openai_sdk` | `openai_sdk`、`curl`、`python_requests` のいずれか |
+| `include_cost_estimate` | boolean | No | `true` | 一般的な使用パターンのコスト見積もりを含める |
 
-**出力例:**
+### `list_top_models`
 
-```
-## anthropic/claude-opus-4.6
+カテゴリ別トップモデルを表示する。鮮度を把握できるようリリース日も含む。`recommend_model` と同じ価格/機能フィルタに対応。
 
-**Provider**: anthropic | **Modality**: text+image→text | **Released**: 2026-01-27
+| 名前 | 型 | 必須 | デフォルト | 説明 |
+|------|------|------|------------|------|
+| `category` | enum | Yes | — | `coding`, `math`, `vision`, `general`, `cost-effective`, `open-source`, `speed`, `context-window`, `reasoning`, `quality` |
+| `limit` | number | No | `10` | 表示件数（1-20） |
+| `min_context` | number | No | — | 最小コンテキストウィンドウ（トークン数） |
+| `min_release_date` | string | No | — | `YYYY-MM-DD`。この日付より前にリリースされたモデルを除外 |
+| `max_input_price` | number | No | — | 入力価格上限（USD/1M tokens） |
+| `max_output_price` | number | No | — | 出力価格上限（USD/1M tokens） |
+| `require_vision` | boolean | No | — | 画像入力対応を必須にする |
+| `require_tools` | boolean | No | — | ツール/関数呼び出し対応を必須にする |
+| `require_open_source` | boolean | No | — | オープンソースライセンスを必須にする |
 
-### Pricing
-| Metric | Value |
-|--------|-------|
-| Input | $5.00 /1M tok |
-| Output | $25.00 /1M tok |
-| Cache Read | $0.50 /1M tok |
-| Context | 1M |
-| Max Output | 128K |
+### `compare_models`
 
-### Benchmarks
-| Benchmark | Score |
-|-----------|-------|
-| SWE-bench Verified | 75.6% |
-| Aider Polyglot | 82.0% |
-| Arena Elo | 1504 |
-| MMMU | 78.3% |
+2〜5個のモデルを横並び比較する。最良値は自動で**太字**表示される。
 
-### Percentile Ranks
-| Category | Percentile |
-|----------|------------|
-| Coding | P97 |
-| General | P98 |
-| Vision | P92 |
+| 名前 | 型 | 必須 | デフォルト | 説明 |
+|------|------|------|------------|------|
+| `models` | string[] | Yes | — | 2〜5個のモデルIDまたは部分名 |
 
-**Capabilities**: Tools, Reasoning, Vision
-```
+### `recommend_model`
 
----
+パーソナライズされたTop3レコメンドを返す。
 
-### 2. `list_top_models` — カテゴリ別ランキング
+| 名前 | 型 | 必須 | デフォルト | 説明 |
+|------|------|------|------------|------|
+| `use_case` | enum | Yes | — | `coding`, `math`, `general`, `vision`, `creative`, `reasoning`, `cost-effective` |
+| `max_input_price` | number | No | — | 入力価格上限（USD/1M tokens） |
+| `max_output_price` | number | No | — | 出力価格上限（USD/1M tokens） |
+| `min_context` | number | No | — | 最小コンテキストウィンドウ（トークン数） |
+| `require_vision` | boolean | No | — | 画像入力対応を必須にする |
+| `require_tools` | boolean | No | — | ツール/関数呼び出し対応を必須にする |
+| `require_open_source` | boolean | No | — | オープンソースライセンスを必須にする |
+| `min_release_date` | string | No | — | `YYYY-MM-DD`。古いモデルを除外 |
 
-指定カテゴリのトップモデルをランキング表示する。リリース日・価格・コンテキスト長を一覧で確認できる。
+### `search_models`
 
-**パラメータ:**
+モデル名、プロバイダ、自然言語クエリでモデルを検索。テキスト関連性でランク付けされ、オプションのカテゴリ別タイブレークと価格/機能フィルタ付き。
 
-| 名前 | 型 | 必須 | 説明 |
-|------|------|------|------|
-| `category` | string | Yes | `coding` / `math` / `vision` / `general` / `cost-effective` / `open-source` / `speed` / `context-window` / `reasoning` |
-| `limit` | number | No | 表示件数 1-20（デフォルト: 10） |
-| `min_context` | number | No | 最小コンテキストウィンドウ（トークン数） |
-| `min_release_date` | string | No | 最小リリース日（`YYYY-MM-DD`）。古いモデルを除外する |
+| 名前 | 型 | 必須 | デフォルト | 説明 |
+|------|------|------|------------|------|
+| `query` | string | Yes | — | 検索クエリ（例: `"cheap vision model"`, `"claude"`） |
+| `category` | enum | No | — | 結果をランク付けするカテゴリ |
+| `limit` | number | No | `10` | 表示件数（1-20） |
+| フィルタ | various | No | — | `max_input_price`, `max_output_price`, `min_context`, `require_vision`, `require_tools`, `require_open_source` |
 
-**出力例:**
+### `list_providers`
 
-```
-## Top 5: coding
+全LLM/VLMプロバイダをモデル数、価格帯、最安モデルとともに表示。プロバイダ名でフィルタ可能。
 
-| # | Model | Key Score | Input $/1M | Output $/1M | Context | Released |
-|------|------|------|------|------|------|------|
-| 1 | anthropic/claude-opus-4.5 | SWE 79.2% | $5.00 | $25.00 | 200K | 2026-01-10 |
-| 2 | google/gemini-3-pro-preview | SWE 77.4% | $2.00 | $12.00 | 1M | 2026-01-22 |
-| 3 | anthropic/claude-sonnet-4 | SWE 76.8% | $3.00 | $15.00 | 1M | 2025-10-15 |
-| 4 | openai/o3 | SWE 75.8% | $10.00 | $40.00 | 200K | 2025-12-04 |
-| 5 | anthropic/claude-opus-4.6 | SWE 75.6% | $5.00 | $25.00 | 1M | 2026-01-27 |
+| 名前 | 型 | 必須 | デフォルト | 説明 |
+|------|------|------|------------|------|
+| `provider` | string | No | — | プロバイダ名でフィルタ（例: `"anthropic"`, `"openai"`） |
 
-**Data freshness**: 2026-02-25T10:30:00Z (5min ago)
-```
+### `list_model_slugs`
 
----
+プロバイダ固有のモデル識別子を検索。モデル名を指定すると、OpenRouter IDに加えてBedrock、Groq、Together、Fireworks、DeepInfraなどのスラグを返す。
 
-### 3. `compare_models` — モデル横並び比較
+| 名前 | 型 | 必須 | デフォルト | 説明 |
+|------|------|------|------------|------|
+| `model` | string | No | — | モデル名でフィルタ（例: `"claude"`, `"gpt"`） |
+| `provider` | string | No | — | 対象プロバイダでフィルタ（例: `"bedrock"`, `"groq"`） |
 
-2-5モデルを横並びで比較する。ベンチマーク・価格・機能の最優値を**太字**でハイライトする。
+### `estimate_cost`
 
-**パラメータ:**
+任意のモデルのAPIコストを見積もる。入出力トークン数と月間コール数を指定して月間予算を計算。
 
-| 名前 | 型 | 必須 | 説明 |
-|------|------|------|------|
-| `models` | string[] | Yes | 2-5個のモデルIDまたは部分名 |
+| 名前 | 型 | 必須 | デフォルト | 説明 |
+|------|------|------|------------|------|
+| `model` | string | Yes | — | モデルIDまたは部分名 |
+| `input_tokens` | number | No | `10000` | 1コールあたりの平均入力トークン数 |
+| `output_tokens` | number | No | `2000` | 1コールあたりの平均出力トークン数 |
+| `monthly_calls` | number | No | — | 月間見積もりAPIコール数 |
 
-**出力例:**
+### `list_new_models`
 
-```
-## Model Comparison (3 models)
+最近リリースされたモデルを表示。リリース日でフィルタ可能。
 
-| | **anthropic/claude-opus-4.6** | **openai/gpt-5.2** | **google/gemini-3-pro** |
-|------|------|------|------|
-| Input $/1M | $5.00 | $2.00 | **$1.25** |
-| Output $/1M | $25.00 | $8.00 | **$5.00** |
-| Context | **1M** | 128K | **1M** |
-| Max Output | **128K** | 64K | 65K |
-| SWE-bench | 75.6% | 72.3% | **77.4%** |
-| Arena Elo | **1504** | 1480 | 1500 |
-| Vision | Yes | Yes | Yes |
-| Tools | Yes | Yes | Yes |
-| Reasoning | Yes | No | Yes |
-| Open Source | No | No | No |
-| Released | 2026-01-27 | 2025-11-18 | 2026-01-22 |
-
-**Data freshness**: 2026-02-25T10:30:00Z (5min ago)
-```
-
----
-
-### 4. `recommend_model` — パーソナライズドレコメンド
-
-ユースケース・予算・要件からTop3モデルを推薦する。スコアリングはベンチマーク加重+価格+機能ボーナス+鮮度ボーナス（3ヶ月以内+3, 6ヶ月以内+1）で算出される。
-
-**パラメータ:**
-
-| 名前 | 型 | 必須 | 説明 |
-|------|------|------|------|
-| `use_case` | string | Yes | `coding` / `math` / `general` / `vision` / `creative` / `reasoning` / `cost-effective` |
-| `max_input_price` | number | No | 入力価格上限（USD/1Mトークン） |
-| `max_output_price` | number | No | 出力価格上限（USD/1Mトークン） |
-| `min_context` | number | No | 最小コンテキストウィンドウ（トークン数） |
-| `require_vision` | boolean | No | 画像入力対応を必須にする |
-| `require_tools` | boolean | No | ツール呼び出し対応を必須にする |
-| `require_open_source` | boolean | No | オープンソースライセンスを必須にする |
-| `min_release_date` | string | No | 最小リリース日（`YYYY-MM-DD`） |
-
-**出力例:**
-
-```
-## Recommended for: coding
-
-### 1. anthropic/claude-sonnet-4.6 (score: 78)
-Input: $3.00/1M | Output: $15.00/1M | Context: 1M | Released: 2026-01-27
-Benchmarks: SWE-bench: 72.1%, Aider: 79.5%, Arena: 1467
-Strengths: reasoning, tools, vision, 1M+ context
-
-### 2. google/gemini-3-flash (score: 74)
-Input: $0.50/1M | Output: $3.00/1M | Context: 1M | Released: 2026-02-01
-Benchmarks: SWE-bench: 75.8%, Arena: 1473
-Strengths: tools, vision, 1M+ context
-
-### 3. openai/gpt-5.1-mini (score: 71)
-Input: $0.30/1M | Output: $1.20/1M | Context: 128K | Released: 2025-12-10
-Benchmarks: SWE-bench: 68.2%, Arena: 1445
-Strengths: tools, vision
-
-**Data freshness**: 2026-02-25T10:30:00Z (5min ago)
-```
+| 名前 | 型 | 必須 | デフォルト | 説明 |
+|------|------|------|------------|------|
+| `max_age_days` | number | No | `90` | 最大経過日数 |
+| `limit` | number | No | `10` | 表示件数 |
+| フィルタ | various | No | — | `min_context`, `max_input_price`, `max_output_price` |
 
 ---
 
 ## データソース
 
-全データはリアルタイムで取得される。認証不要、全て無料のパブリックAPIを使用する。
+全データは無料のパブリックAPIからリアルタイムに取得される。認証不要。
 
-| ソース | データ内容 | モデル数 | 認証 |
-|--------|-----------|---------|------|
-| [OpenRouter](https://openrouter.ai/api/v1/models) | 価格、コンテキスト長、モダリティ、リリース日 | 300+ | 不要 |
-| [SWE-bench](https://github.com/SWE-bench/swe-bench.github.io) | コーディングベンチマーク（Verified leaderboard） | 40+ | 不要 |
-| [LM Arena](https://arena.ai) | 人間選好Eloレーティング | 314+ | 不要 |
-| [OpenCompass VLM](https://opencompass.org.cn) | ビジョンベンチマーク（MMMU, MMBench, OCRBench, AI2D, MathVista） | 284+ | 不要 |
-| [Aider Polyglot](https://aider.chat/docs/leaderboards/) | 多言語コーディングパスレート | 63+ | 不要 |
+| ソース | データ内容 | モデル数 | Cache TTL |
+|--------|-----------|---------|-----------|
+| [OpenRouter](https://openrouter.ai/api/v1/models) | 価格、コンテキスト長、モダリティ、リリース日 | 300+ | 1時間 |
+| [SWE-bench](https://github.com/SWE-bench/swe-bench.github.io) | コーディングベンチマーク（Verified leaderboard） | 30+ | 6時間 |
+| [LM Arena](https://lmarena.ai) | 人間選好Eloレーティング | 314+ | 6時間 |
+| [OpenCompass VLM](https://opencompass.org.cn) | ビジョンベンチマーク: MMMU, MMBench, OCRBench, AI2D, MathVista | 284+ | 6時間 |
+| [Aider Polyglot](https://aider.chat/docs/leaderboards/) | 多言語コーディングパスレート | 63+ | 6時間 |
+| [BFCL V4](https://gorilla.cs.berkeley.edu/leaderboard.html) | エージェント関数呼び出しベンチマーク | 109+ | 6時間 |
+| [静的スピードデータ](https://whatllm.org) | 出力トークン/秒とTime-to-First-Token | 26+ | 24時間 |
+
+---
+
+## 新モデル検出について
+
+新モデルがリリースされたとき、各データソースで異なる速度で反映されます：
+
+| データ | ソース | 自動検出？ | 遅延 |
+|--------|--------|-----------|------|
+| 価格、コンテキスト、モダリティ、リリース日 | OpenRouter（ライブ） | ✅ はい — OpenRouter APIに存在する全モデルを取得 | ≤1時間 |
+| 機能（ツール、視覚、推論） | OpenRouter（ライブ） | ✅ はい — `supported_parameters` から判定 | ≤1時間 |
+| SWE-benchスコア | SWE-bench（ライブ） | ✅ はい — ベンチマークがモデルを追加すれば反映 | ≤6時間 |
+| Arena Elo | LM Arena（ライブ） | ✅ はい — Arenaがモデルを追加すれば反映 | ≤6時間 |
+| VLMベンチマーク | OpenCompass（ライブ） | ✅ はい — OpenCompassがモデルを追加すれば反映 | ≤6時間 |
+| Aider Polyglot通過率 | Aider（ライブ） | ✅ はい — Aiderがモデルを追加すれば反映 | ≤6時間 |
+| BFCL V4エージェントスコア | BFCL（ライブ） | ✅ はい — BFCLがモデルを追加すれば反映 | ≤6時間 |
+| 出力速度（tok/s） | 静的データ + ヒューリスティック推定 | ✅ はい — 40+モデルは実測、**それ以外はすべて**価格とファミリー名から推定 | ≤1時間 |
+| Time-to-First-Token | 静的データ + ヒューリスティック推定 | ✅ はい — 同上、全モデルで動作 | ≤1時間 |
+| プロバイダスラグ | ヒューリスティック生成 | ✅ はい — モデルIDから命名規則に基づき自動生成 | ≤1時間 |
+| プロバイダ別価格比較 | 既知データ + ヒューリスティック推定 | ✅ はい — 10+モデルは既知、**それ以外はすべて**プロバイダ別マークアップパターンから自動推定 | ≤1時間 |
+
+**まとめ：** すべてのデータが新モデルに対して自動検出されます。価格、機能、ベンチマーク、速度推定、プロバイダスラグ、プロバイダ別価格比較がすべて自動的に反映されます。
 
 ---
 
 ## コンテキストコスト
 
-MCPツールの応答はLLMのコンテキストウィンドウを消費する。llm-advisor-mcpはMarkdownテーブル出力によりトークン消費を最小化している。
-
 | 項目 | トークン数 |
 |------|-----------|
-| ツール定義（4ツール合計） | ~1,000 |
-| `get_model_info` 応答 | ~300 |
-| `list_top_models` 応答 | ~250 |
-| `compare_models` 応答 | ~400 |
-| `recommend_model` 応答 | ~350 |
-
-参考: 生JSONで同等データを返す場合は~3,000トークン消費する。約10倍の差がある。
+| 9つのツール定義すべて | ~2,500 |
+| 典型的なツール応答 | ~250-400 |
 
 ---
 
 ## アーキテクチャ
 
 ```
-┌─────────────────────────────────────────────┐
-│              MCP Client (Claude等)           │
-└──────────────────┬──────────────────────────┘
-                   │ MCP Protocol (stdio)
-┌──────────────────▼──────────────────────────┐
-│            llm-advisor-mcp                   │
-│                                              │
-│  ┌────────────────────────────────────────┐  │
-│  │  Tools                                 │  │
-│  │  get_model_info | list_top_models      │  │
-│  │  compare_models | recommend_model      │  │
-│  └────────────┬───────────────────────────┘  │
-│               │                              │
-│  ┌────────────▼───────────────────────────┐  │
-│  │  Model Registry                        │  │
-│  │  - クロスソース名前正規化              │  │
-│  │  - 5カテゴリ パーセンタイル計算         │  │
-│  │  - インメモリキャッシュ                │  │
-│  │    (価格: 1時間TTL / ベンチマーク: 6時間)│  │
-│  └────────────┬───────────────────────────┘  │
-│               │                              │
-│  ┌────────────▼───────────────────────────┐  │
-│  │  Data Sources (5 fetchers)             │  │
-│  │  OpenRouter | SWE-bench | LM Arena     │  │
-│  │  OpenCompass VLM | Aider Polyglot      │  │
-│  └────────────────────────────────────────┘  │
+┌──────────────────────────────────────────────┐
+│              MCP Client (Claude, etc.)        │
+└──────────┬───────────────────────────────────┘
+           │ stdio (JSON-RPC)
+┌──────────▼───────────────────────────────────┐
+│            llm-advisor-mcp server             │
+│                                               │
+│  ┌─────────┐  ┌───────────┐  ┌────────────┐  │
+│  │  Tools   │  │ Registry  │  │   Cache    │  │
+│  │ (10 tools)│──│ (unified) │──│ (in-memory)│  │
+│  └──────────┘  └────────────┘  └────────────┘  │
+│                     │                         │
+│        ┌────────────┼────────────┐            │
+│        ▼            ▼            ▼            │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐      │
+│  │Normalizer│ │Percentile│ │ Fetchers │      │
+│  │(slug map)│ │ (7 cats) │ │(7 sources│      │
+│  └──────────┘ └──────────┘ └──────────┘      │
 └──────────────────────────────────────────────┘
+           │           │           │
+     OpenRouter    SWE-bench    Arena / VLM / Aider
+                                BFCL / Speed
 ```
 
-- **TypeScript / ESM** — 単一エントリポイント
-- **ランタイム依存**: `@modelcontextprotocol/sdk` + `zod` のみ
-- **キャッシュ戦略**: 価格データは1時間、ベンチマークは6時間のTTLでインメモリキャッシュ
-- **名前正規化**: 異なるソース間のモデルID不一致（`claude-3-5-sonnet` vs `claude-3.5-sonnet`等）を自動解決
-- **スコアリング**: ユースケース別ベンチマーク加重 + 価格逆比例スコア + 機能ボーナス + 鮮度ボーナス
+- **TypeScript + ESM** — 単一エントリポイント、`tsup` ビルド
+- **インメモリキャッシュ** — TTLベース（価格1時間、ベンチマーク6時間）、stale-while-revalidate
+- **クロスソース正規化** — ソース間で揺れるモデル名を正規IDへ対応付け
+- **パーセンタイル計算** — 7カテゴリ（coding, math, general, vision, cost efficiency, speed, agentic）で順位付け
+- **鮮度スコアリング** — レコメンドアルゴリズムが最近リリースされたモデルへボーナスを付与
+- **ランタイム依存は最小限** — `@modelcontextprotocol/sdk` と `zod` のみ
 
 ---
 
 ## ロードマップ
 
-| バージョン | 内容 |
-|-----------|------|
-| v0.1 | `get_model_info` + `list_top_models`（OpenRouterのみ） |
-| v0.2 | `compare_models` + `recommend_model` + SWE-bench + Arena Elo統合 |
-| v0.3 | VLMベンチマーク（MMMU, MMBench, OCRBench, AI2D, MathVista）+ Aider Polyglot + パーセンタイルランク + 43テスト |
-| **v0.4**（現在）| リリース日の表示・フィルタ・鮮度スコアリング + 51テスト |
-| v1.0 | コミュニティ貢献、GitHub Actionsによる週次静的データ更新 |
+| バージョン | 状態 | ハイライト |
+|-----------|------|------------|
+| v0.1 | Done | `get_model_info` + `list_top_models`（OpenRouter） |
+| v0.2 | Done | `compare_models` + `recommend_model` + SWE-bench + Arena Elo |
+| v0.3 | Done | VLMベンチマーク + Aider Polyglot + パーセンタイルランク + 43テスト |
+| v0.4 | Done | リリース日フィルタ、鮮度スコアリング、複合ベンチマークスコア + 126テスト |
+| v0.5 | **Current** | `search_models`, `list_providers`, `estimate_cost`, `list_new_models`, `list_model_slugs`、BFCL V4、スピードデータ、品質指数 + **9ツール、7データソース** |
+| v1.0 | Planned | コミュニティ貢献、週次データスナップショット |
 
 ---
 
 ## 開発
 
-### 前提条件
-
-- Node.js >= 18
-
-### セットアップ
-
 ```bash
 git clone https://github.com/Daichi-Kudo/llm-advisor-mcp.git
 cd llm-advisor-mcp
 npm install
+npm run build
+npm run dev         # tsxで実行（ホットリロード）
+npm test            # 126個のユニットテストを実行
 ```
 
-### ビルド・テスト
+### プロジェクト構成
 
-```bash
-npm run build          # TypeScriptコンパイル（tsup）
-npm run dev            # 開発用サーバー起動（tsx）
-npm test               # テスト実行（vitest, 51テスト）
-npm run test:watch     # テストウォッチモード
 ```
-
-### 貢献方法
-
-1. リポジトリをforkする
-2. フィーチャーブランチを作成する（`git checkout -b feature/new-benchmark`）
-3. テストを追加する
-4. PRを送る
-
-新しいベンチマークソースの追加は特に歓迎する。`src/data/` にfetcherを追加し、`src/data/registry.ts` で統合する。
+src/
+  index.ts              # サーバーエントリポイント
+  types.ts              # 型定義
+  tools/                # 9つのツール
+    model-info.ts       # get_model_info
+    list-top.ts         # list_top_models
+    compare.ts          # compare_models
+    recommend.ts        # recommend_model
+    search.ts           # search_models
+    providers.ts        # list_providers
+    estimate.ts         # estimate_cost
+    new-models.ts       # list_new_models
+    slugs.ts            # list_model_slugs
+    formatters.ts       # Markdown出力フォーマッタ
+  data/
+    registry.ts         # 統合モデルレジストリ
+    cache.ts            # インメモリTTLキャッシュ
+    normalizer.ts       # クロスソース名正規化
+    percentiles.ts      # パーセンタイル計算（7カテゴリ）
+    fetchers/           # 7つのデータフェッチャー
+      openrouter.ts     # OpenRouter API
+      swe-bench.ts      # SWE-bench
+      arena.ts          # LM Arena Elo
+      vlm-leaderboard.ts # OpenCompass VLM
+      aider.ts          # Aider Polyglot
+      bfcl.ts           # BFCL V4（エージェントベンチマーク）
+      speed.ts          # 静的スピード/レイテンシデータ
+    static/
+      api-examples.ts   # APIコードスニペットテンプレート
+```
 
 ---
 

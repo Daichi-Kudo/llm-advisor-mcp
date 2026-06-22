@@ -1,10 +1,17 @@
 import type { InMemoryCache } from "../cache.js";
+import { SERVER_NAME, SERVER_VERSION } from "../../metadata.js";
+import { normalizeForIndex } from "../normalizer.js";
+import { readResponseJson, readResponseText } from "./http.js";
 
 const ARENA_URL = "https://arena.ai/leaderboard/text";
 const HF_FALLBACK_URL =
   "https://datasets-server.huggingface.co/rows?dataset=mathewhe/chatbot-arena-elo&config=default&split=train&offset=0&length=100";
 const CACHE_KEY = "arena:elo";
 const TTL = 6 * 60 * 60 * 1000; // 6 hours
+const MIN_ARENA_ENTRIES = 50;
+const MAX_HTML_BYTES = 10 * 1024 * 1024;
+const MAX_HF_BYTES = 2 * 1024 * 1024;
+const MAX_STALE_MS = 24 * 60 * 60 * 1000;
 
 export interface ArenaEntry {
   name: string;
@@ -62,28 +69,37 @@ export async function fetchArenaScores(
   const cached = cache.get<Map<string, ArenaEntry>>(CACHE_KEY);
   if (cached) return cached;
 
-  const stale = cache.getStaleOrNull<Map<string, ArenaEntry>>(CACHE_KEY);
+  const stale = cache.getStaleOrNull<Map<string, ArenaEntry>>(CACHE_KEY, MAX_STALE_MS);
 
+  // Try primary source first. Keep this isolated so an arena.ai network,
+  // status, or parser failure still reaches the HuggingFace fallback.
   try {
-    // Try primary source first
     const result = await fetchFromArenaAi();
-    if (result.size > 0) {
+    if (result.size >= MIN_ARENA_ENTRIES) {
       cache.set(CACHE_KEY, result, TTL, "arena.ai");
       return result;
     }
+    if (result.size > 0) {
+      console.error(`Arena primary returned only ${result.size} entries; trying HuggingFace fallback`);
+    }
+  } catch (error) {
+    console.error(`Arena primary fetch failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
 
-    // Fall back to HuggingFace datasets-server
+  // Fall back to HuggingFace datasets-server.
+  try {
     const fallback = await fetchFromHuggingFace();
     if (fallback.size > 0) {
       cache.set(CACHE_KEY, fallback, TTL, "hf-datasets");
       return fallback;
     }
-
-    throw new Error("Both Arena sources returned empty data");
+    console.error("Arena HuggingFace fallback returned empty data");
   } catch (error) {
-    if (stale) return stale.data;
-    return new Map();
+    console.error(`Arena HuggingFace fallback failed: ${error instanceof Error ? error.message : String(error)}`);
   }
+
+  if (stale) return stale.data;
+  return new Map();
 }
 
 // ============================================================
@@ -93,8 +109,9 @@ export async function fetchArenaScores(
 async function fetchFromArenaAi(): Promise<Map<string, ArenaEntry>> {
   const response = await fetch(ARENA_URL, {
     signal: AbortSignal.timeout(20_000),
+    redirect: "error",
     headers: {
-      "User-Agent": "llm-advisor-mcp/0.2.0",
+      "User-Agent": `${SERVER_NAME}/${SERVER_VERSION}`,
       Accept: "text/html",
     },
   });
@@ -103,7 +120,7 @@ async function fetchFromArenaAi(): Promise<Map<string, ArenaEntry>> {
     throw new Error(`arena.ai returned ${response.status}`);
   }
 
-  const html = await response.text();
+  const html = await readResponseText(response, MAX_HTML_BYTES, "arena.ai");
 
   // arena.ai uses React Server Components (RSC) streaming.
   // Leaderboard data is embedded in self.__next_f.push([1,"b:..."]) chunks.
@@ -151,16 +168,16 @@ async function fetchFromArenaAi(): Promise<Map<string, ArenaEntry>> {
   for (const entry of entries) {
     const name = entry.modelDisplayName;
     const rating = entry.rating;
-    if (!name || typeof rating !== "number" || rating <= 0) continue;
+    if (!name || !isFiniteNumber(rating) || rating <= 0) continue;
 
-    scores.set(normalizeArenaName(name), {
+    scores.set(normalizeForIndex(name), {
       name,
       arenaScore: Math.round(rating),
-      ciLower: entry.ratingLower ? Math.round(entry.ratingLower) : undefined,
-      ciUpper: entry.ratingUpper ? Math.round(entry.ratingUpper) : undefined,
-      votes: entry.votes,
+      ciLower: isFiniteNumber(entry.ratingLower) ? Math.round(entry.ratingLower) : undefined,
+      ciUpper: isFiniteNumber(entry.ratingUpper) ? Math.round(entry.ratingUpper) : undefined,
+      votes: isFiniteNumber(entry.votes) ? entry.votes : undefined,
       organization: entry.modelOrganization ?? undefined,
-      rank: entry.rank,
+      rank: isFiniteNumber(entry.rank) ? entry.rank : undefined,
     });
   }
 
@@ -177,16 +194,30 @@ async function fetchFromHuggingFace(): Promise<Map<string, ArenaEntry>> {
   // Fetch first 100 rows
   const first = await fetchHfPage(0);
   for (const entry of first.entries) {
-    scores.set(normalizeArenaName(entry.name), entry);
+    scores.set(normalizeForIndex(entry.name), entry);
   }
 
   // Fetch remaining rows if needed
   if (first.total > 100) {
     const pages = Math.ceil(first.total / 100);
-    for (let page = 1; page < pages && page < 5; page++) {
-      const next = await fetchHfPage(page * 100);
-      for (const entry of next.entries) {
-        scores.set(normalizeArenaName(entry.name), entry);
+    const cappedPages = Math.min(pages, 5);
+    if (pages > cappedPages) {
+      console.error(`Arena HuggingFace fallback has ${first.total} rows; fetching first ${cappedPages * 100} rows only`);
+    }
+    const remainingPromises = Array.from(
+      { length: cappedPages - 1 },
+      (_, i) => fetchHfPage((i + 1) * 100)
+    );
+    const remainingResults = await Promise.allSettled(remainingPromises);
+    for (let i = 0; i < remainingResults.length; i++) {
+      const result = remainingResults[i];
+      if (result.status === "fulfilled") {
+        for (const entry of result.value.entries) {
+          scores.set(normalizeForIndex(entry.name), entry);
+        }
+      } else {
+        const offset = (i + 1) * 100;
+        console.error(`HF datasets-server page ${offset} failed: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`);
       }
     }
   }
@@ -197,8 +228,10 @@ async function fetchFromHuggingFace(): Promise<Map<string, ArenaEntry>> {
 async function fetchHfPage(
   offset: number
 ): Promise<{ entries: ArenaEntry[]; total: number }> {
-  const url = `${HF_FALLBACK_URL.replace("offset=0", `offset=${offset}`)}`;
+  const url = buildHfFallbackUrl(offset);
   const response = await fetch(url, {
+    headers: { "User-Agent": `${SERVER_NAME}/${SERVER_VERSION}` },
+    redirect: "error",
     signal: AbortSignal.timeout(15_000),
   });
 
@@ -206,14 +239,14 @@ async function fetchHfPage(
     throw new Error(`HF datasets-server returned ${response.status}`);
   }
 
-  const data = (await response.json()) as HfResponse;
+  const data = await readResponseJson<HfResponse>(response, MAX_HF_BYTES, "HF datasets-server");
   const entries: ArenaEntry[] = [];
 
   for (const row of data.rows) {
     const r = row.row;
     const name = r.Model;
     const score = r["Arena Score"];
-    if (!name || typeof score !== "number") continue;
+    if (!name || !isFiniteNumber(score)) continue;
 
     // Parse CI: "(-12, +8)" or similar
     let ciLower: number | undefined;
@@ -223,8 +256,10 @@ async function fetchHfPage(
         /(-?\d+\.?\d*)\s*,\s*\+?(-?\d+\.?\d*)/
       );
       if (ciMatch) {
-        ciLower = score + parseFloat(ciMatch[1]);
-        ciUpper = score + parseFloat(ciMatch[2]);
+        const parsedLower = parseFloat(ciMatch[1]);
+        const parsedUpper = parseFloat(ciMatch[2]);
+        ciLower = Number.isFinite(parsedLower) ? score + parsedLower : undefined;
+        ciUpper = Number.isFinite(parsedUpper) ? score + parsedUpper : undefined;
       }
     }
 
@@ -233,30 +268,24 @@ async function fetchHfPage(
       arenaScore: Math.round(score),
       ciLower,
       ciUpper,
-      votes: typeof r.Votes === "number" ? r.Votes : undefined,
+      votes: isFiniteNumber(r.Votes) ? r.Votes : undefined,
       organization: typeof r.Organization === "string" ? r.Organization : undefined,
-      rank: typeof r["Rank* (UB)"] === "number" ? r["Rank* (UB)"] : undefined,
+      rank: isFiniteNumber(r["Rank* (UB)"]) ? r["Rank* (UB)"] : undefined,
     });
   }
 
   return { entries, total: data.num_rows_total };
 }
 
-// ============================================================
-// Name normalization
-// ============================================================
+export function buildHfFallbackUrl(offset: number): string {
+  if (!Number.isInteger(offset) || offset < 0) {
+    throw new Error(`Invalid HuggingFace fallback offset: ${offset}`);
+  }
+  const url = new URL(HF_FALLBACK_URL);
+  url.searchParams.set("offset", String(offset));
+  return url.toString();
+}
 
-/**
- * Normalize Arena model names for matching:
- * "Claude 4.5 Opus" → "claude-4.5-opus"
- * "GPT-5.1-turbo" → "gpt-5.1-turbo"
- */
-function normalizeArenaName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[()]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9.\-]/g, "")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
 }

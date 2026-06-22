@@ -1,9 +1,14 @@
 import type { InMemoryCache } from "../cache.js";
+import { SERVER_NAME, SERVER_VERSION } from "../../metadata.js";
+import { normalizeForIndex } from "../normalizer.js";
+import { readResponseText } from "./http.js";
 
 const API_URL =
   "https://raw.githubusercontent.com/Aider-AI/aider/main/aider/website/_data/polyglot_leaderboard.yml";
 const CACHE_KEY = "aider:polyglot";
 const TTL = 6 * 60 * 60 * 1000; // 6 hours
+const MAX_RESPONSE_BYTES = 1 * 1024 * 1024;
+const MAX_STALE_MS = 24 * 60 * 60 * 1000;
 
 export interface AiderEntry {
   name: string;
@@ -22,7 +27,7 @@ export interface AiderEntry {
 /**
  * Fetch Aider Polyglot benchmark scores.
  * Returns a Map of normalized model names → benchmark scores.
- * Data source: ~63 models from aider.chat GitHub repo (YAML).
+ Data source: ~70 models from aider.chat GitHub repo (YAML).
  */
 export async function fetchAiderScores(
   cache: InMemoryCache
@@ -30,10 +35,12 @@ export async function fetchAiderScores(
   const cached = cache.get<Map<string, AiderEntry>>(CACHE_KEY);
   if (cached) return cached;
 
-  const stale = cache.getStaleOrNull<Map<string, AiderEntry>>(CACHE_KEY);
+  const stale = cache.getStaleOrNull<Map<string, AiderEntry>>(CACHE_KEY, MAX_STALE_MS);
 
   try {
     const response = await fetch(API_URL, {
+      headers: { "User-Agent": `${SERVER_NAME}/${SERVER_VERSION}` },
+      redirect: "error",
       signal: AbortSignal.timeout(15_000),
     });
 
@@ -41,16 +48,19 @@ export async function fetchAiderScores(
       throw new Error(`Aider leaderboard returned ${response.status}`);
     }
 
-    const text = await response.text();
+    const text = await readResponseText(response, MAX_RESPONSE_BYTES, "Aider leaderboard");
     const entries = parseSimpleYamlList(text);
+    if (entries.length === 0) {
+      throw new Error("Aider leaderboard parser returned no entries");
+    }
     const scores = new Map<string, AiderEntry>();
 
     for (const entry of entries) {
-      const model = entry.model;
-      const passRate2 = parseFloat(entry.pass_rate_2);
-      if (!model || isNaN(passRate2) || passRate2 <= 0) continue;
+      const model = entry["model"];
+      const passRate2 = parseFloat(entry["pass_rate_2"]);
+      if (!model || Number.isNaN(passRate2) || passRate2 <= 0) continue;
 
-      const key = normalizeAiderName(model);
+      const key = normalizeForIndex(model);
 
       // Keep the best score per model (some models have multiple entries with different edit formats)
       const existing = scores.get(key);
@@ -59,16 +69,21 @@ export async function fetchAiderScores(
       scores.set(key, {
         name: model,
         passRate2,
-        passRate1: safeParseFloat(entry.pass_rate_1),
-        wellFormed: safeParseFloat(entry.percent_cases_well_formed),
-        totalCost: safeParseFloat(entry.total_cost),
-        editFormat: entry.edit_format || undefined,
+        passRate1: safeParseFloat(entry["pass_rate_1"]),
+        wellFormed: safeParseFloat(entry["percent_cases_well_formed"]),
+        totalCost: safeParseFloat(entry["total_cost"]),
+        editFormat: entry["edit_format"] || undefined,
       });
+    }
+
+    if (scores.size === 0) {
+      throw new Error("Aider leaderboard returned no usable model scores");
     }
 
     cache.set(CACHE_KEY, scores, TTL, "aider");
     return scores;
   } catch (error) {
+    console.error(`Aider leaderboard fetch failed: ${error instanceof Error ? error.message : String(error)}`);
     if (stale) return stale.data;
     return new Map();
   }
@@ -92,8 +107,10 @@ interface YamlEntry {
  *     ...
  *
  * Does NOT handle: nested objects, multiline strings, anchors, etc.
+ *
+ * @internal Exported for parser regression tests only; not part of the public MCP API.
  */
-function parseSimpleYamlList(text: string): YamlEntry[] {
+export function parseSimpleYamlList(text: string): YamlEntry[] {
   const entries: YamlEntry[] = [];
   let current: YamlEntry | null = null;
 
@@ -106,14 +123,14 @@ function parseSimpleYamlList(text: string): YamlEntry[] {
     if (newItemMatch) {
       if (current) entries.push(current);
       current = {};
-      current[newItemMatch[1]] = newItemMatch[2].trim();
+      current[newItemMatch[1]] = normalizeYamlScalar(newItemMatch[2]);
       continue;
     }
 
     // Continuation: "  key: value"
     const contMatch = trimmed.match(/^\s+(\w[\w_]*):\s*(.*)$/);
     if (contMatch && current) {
-      current[contMatch[1]] = contMatch[2].trim();
+      current[contMatch[1]] = normalizeYamlScalar(contMatch[2]);
     }
   }
 
@@ -128,16 +145,12 @@ function parseSimpleYamlList(text: string): YamlEntry[] {
 function safeParseFloat(val: string | undefined): number | undefined {
   if (!val) return undefined;
   const n = parseFloat(val);
-  return isNaN(n) ? undefined : n;
+  return Number.isNaN(n) ? undefined : n;
 }
 
-/** Normalize Aider model names for matching */
-function normalizeAiderName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[()]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9.\-]/g, "")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
+/** @internal Exported for parser regression tests only; not part of the public MCP API. */
+export function normalizeYamlScalar(value: string): string {
+  const trimmed = value.trim();
+  const quoted = trimmed.match(/^(?:"(.*)"|'(.*)')$/);
+  return quoted ? (quoted[1] ?? quoted[2] ?? "") : trimmed;
 }

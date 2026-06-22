@@ -43,6 +43,8 @@ export interface ModelPricing {
   input: number;
   /** USD per 1M output tokens */
   output: number;
+  /** USD per request */
+  request?: number;
   /** USD per 1M cached input tokens */
   cacheRead?: number;
   /** USD per 1M cache write tokens */
@@ -56,8 +58,6 @@ export interface ModelPricing {
 export interface BenchmarkScores {
   // Coding
   sweBenchVerified?: number;
-  sweBenchLite?: number;
-  humanEval?: number;
   aiderPolyglot?: number;
 
   // General
@@ -75,6 +75,17 @@ export interface BenchmarkScores {
   ocrBench?: number;
   ai2d?: number;
   mathVista?: number;
+
+  // Agentic (BFCL V4)
+  bfclV4Overall?: number;
+  bfclV4Agentic?: number;
+  bfclV4MultiTurn?: number;
+  bfclV4SingleTurn?: number;
+  bfclV4Cost?: number;
+
+  // Speed
+  outputTokensPerSecond?: number;
+  timeToFirstToken?: number;
 }
 
 export interface ModelCapabilities {
@@ -85,6 +96,14 @@ export interface ModelCapabilities {
   supportsTools: boolean;
   supportsStreaming: boolean;
   supportsReasoning: boolean;
+}
+
+/** Speed and latency data for a model. Undefined when no data is available. */
+export interface ModelSpeed {
+  /** Output tokens per second */
+  outputTokensPerSecond?: number;
+  /** Time to first token in seconds */
+  timeToFirstToken?: number;
 }
 
 export interface ModelMetadata {
@@ -100,6 +119,8 @@ export interface PercentileRanks {
   general?: number;
   vision?: number;
   costEfficiency?: number;
+  speed?: number;
+  agentic?: number;
 }
 
 export interface UnifiedModel {
@@ -114,6 +135,8 @@ export interface UnifiedModel {
   capabilities: ModelCapabilities;
   metadata: ModelMetadata;
   percentiles: PercentileRanks;
+  /** Speed/latency data (may be sparse) */
+  speed: ModelSpeed;
   /** ISO 8601 timestamp of last data update */
   lastUpdated: string;
 }
@@ -122,27 +145,33 @@ export interface UnifiedModel {
 // Tool parameter types
 // ============================================================
 
-export type UseCase =
-  | "coding"
-  | "math"
-  | "general"
-  | "vision"
-  | "creative"
-  | "reasoning"
-  | "cost-effective";
+export const USE_CASES = [
+  "coding",
+  "math",
+  "general",
+  "vision",
+  "creative",
+  "reasoning",
+  "cost-effective",
+] as const;
 
-export type ModelCategory =
-  | "coding"
-  | "math"
-  | "vision"
-  | "general"
-  | "cost-effective"
-  | "open-source"
-  | "speed"
-  | "context-window"
-  | "reasoning";
+export type UseCase = (typeof USE_CASES)[number];
 
-export type ApiExampleFormat = "openai_sdk" | "curl" | "python_requests";
+export const MODEL_CATEGORIES = [
+  "coding",
+  "math",
+  "vision",
+  "general",
+  "cost-effective",
+  "open-source",
+  "speed",
+  "context-window",
+  "reasoning",
+  "quality",
+  "image-gen",
+] as const;
+
+export type ModelCategory = (typeof MODEL_CATEGORIES)[number];
 
 // ============================================================
 // Cache types
@@ -154,15 +183,4 @@ export interface CacheEntry<T> {
   ttl: number;
   source: string;
   etag?: string;
-}
-
-// ============================================================
-// Scoring types
-// ============================================================
-
-export interface ScoringWeights {
-  benchmarkWeight: number;
-  priceWeight: number;
-  speedWeight: number;
-  primaryBenchmarks: (keyof BenchmarkScores)[];
 }

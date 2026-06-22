@@ -1,9 +1,13 @@
 import type { InMemoryCache } from "../cache.js";
+import { SERVER_NAME, SERVER_VERSION } from "../../metadata.js";
+import { readResponseJson } from "./http.js";
 
 const API_URL =
   "https://raw.githubusercontent.com/SWE-bench/swe-bench.github.io/master/data/leaderboards.json";
 const CACHE_KEY = "swebench:verified";
 const TTL = 6 * 60 * 60 * 1000; // 6 hours
+const MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
+const MAX_STALE_MS = 24 * 60 * 60 * 1000;
 
 export interface SweBenchEntry {
   name: string;
@@ -34,10 +38,12 @@ export async function fetchSweBenchScores(
   const cached = cache.get<Map<string, SweBenchEntry>>(CACHE_KEY);
   if (cached) return cached;
 
-  const stale = cache.getStaleOrNull<Map<string, SweBenchEntry>>(CACHE_KEY);
+  const stale = cache.getStaleOrNull<Map<string, SweBenchEntry>>(CACHE_KEY, MAX_STALE_MS);
 
   try {
     const response = await fetch(API_URL, {
+      headers: { "User-Agent": `${SERVER_NAME}/${SERVER_VERSION}` },
+      redirect: "error",
       signal: AbortSignal.timeout(15_000),
     });
 
@@ -45,7 +51,11 @@ export async function fetchSweBenchScores(
       throw new Error(`SWE-bench API returned ${response.status}`);
     }
 
-    const data = (await response.json()) as SweBenchResponse;
+    const data = await readResponseJson<SweBenchResponse>(
+      response,
+      MAX_RESPONSE_BYTES,
+      "SWE-bench API"
+    );
     const verified = data.leaderboards.find((lb) => lb.name === "Verified");
     if (!verified) throw new Error("SWE-bench Verified leaderboard not found");
 
@@ -65,7 +75,7 @@ export async function fetchSweBenchScores(
           name: modelName,
           resolved: result.resolved,
           date: result.date,
-          cost: result.cost ?? undefined,
+          cost: result.cost !== null ? result.cost : undefined,
         });
       }
     }
@@ -73,6 +83,7 @@ export async function fetchSweBenchScores(
     cache.set(CACHE_KEY, modelScores, TTL, "swe-bench");
     return modelScores;
   } catch (error) {
+    console.error(`SWE-bench fetch failed: ${error instanceof Error ? error.message : String(error)}`);
     if (stale) return stale.data;
     return new Map();
   }
@@ -84,8 +95,10 @@ export async function fetchSweBenchScores(
  * "live-SWE-agent + Gemini 3 Pro Preview (2025-11-18)" → "Gemini 3 Pro Preview"
  * "TRAE + Doubao-Seed-Code" → "Doubao-Seed-Code"
  * "Atlassian Rovo Dev (2025-09-02)" → null (no clear model name)
+ *
+ * @internal Exported for parser regression tests only; not part of the public MCP API.
  */
-function extractModelName(entryName: string): string | null {
+export function extractModelName(entryName: string): string | null {
   // Pattern: "Agent + Model (qualifier)" — extract after "+"
   const plusMatch = entryName.match(/\+\s*(.+)/);
   if (plusMatch) {
@@ -100,7 +113,9 @@ function extractModelName(entryName: string): string | null {
   // No "+" separator — check if it contains a known model name pattern
   const knownPatterns = [
     /claude/i, /gpt/i, /gemini/i, /deepseek/i, /qwen/i, /llama/i,
-    /sonnet/i, /opus/i, /mistral/i,
+    /sonnet/i, /opus/i, /mistral/i, /phi/i, /command/i, /nemotron/i,
+    /dbrx/i, /reka/i, /aya/i, /cohere/i, /snowflake/i, /internlm/i,
+    /yi/i, /glm/i, /o1/i, /o3/i, /o4/i, /doubao/i,
   ];
   if (knownPatterns.some((p) => p.test(entryName))) {
     // Remove agent prefixes and date suffixes

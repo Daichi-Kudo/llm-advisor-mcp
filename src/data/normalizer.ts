@@ -3,6 +3,8 @@ import type { SweBenchEntry } from "./fetchers/swe-bench.js";
 import type { ArenaEntry } from "./fetchers/arena.js";
 import type { VlmEntry } from "./fetchers/vlm-leaderboard.js";
 import type { AiderEntry } from "./fetchers/aider.js";
+import type { BfclEntry } from "./fetchers/bfcl.js";
+import type { SpeedEntry } from "./fetchers/speed.js";
 
 /**
  * Normalize a model name to a canonical key for cross-source matching.
@@ -22,10 +24,12 @@ export function normalizeKey(name: string): string {
     .replace(/^[a-z0-9_-]+\//, "")
     // Strip date suffixes: -20251101, -2025-11-18, (20251101)
     .replace(/[-\s]?\(?20\d{2}-?\d{2}-?\d{2}\)?/g, "")
+    // Strip trailing year or month-year suffixes before version normalization.
+    .replace(/[-\s]?\(?(?:(?:0[1-9]|1[0-2])-)?20\d{2}\)?$/g, "")
     // Strip thinking/reasoning suffixes for base model matching
     .replace(/-thinking(?:-\d+k)?$/, "")
     // Strip common variant suffixes
-    .replace(/-(chat|latest|preview|turbo|mini|fast|high|medium|low)(?=$|-)/g, (m, suffix) => {
+    .replace(/-(chat|latest|preview|turbo|mini|fast)(?=$|-)/g, (m, suffix) => {
       // Keep "preview", "mini", "fast" as they distinguish different models
       if (["preview", "mini", "fast"].includes(suffix)) return m;
       return "";
@@ -37,11 +41,28 @@ export function normalizeKey(name: string): string {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
 
-  // Convert version-number hyphens to dots: "4-6" → "4.6", "3-1" → "3.1"
-  // But only for version-like patterns (digit-digit at end or before known suffix)
-  key = key.replace(/(\d+)-(\d+)(?=$|-(?:pro|flash|opus|sonnet|plus|max|mini))/g, "$1.$2");
+  // Convert version-number hyphens to dots: "4-6" → "4.6", "3-1" → "3.1".
+  // Match before any textual variant suffix, not just a small allowlist, so
+  // "claude-3-5-haiku", "gpt-4-1-mini", and "gemini-2-5-flash" align with
+  // benchmark names that spell the same versions with dots.
+  key = key.replace(/(\d+)-(\d+)(?=$|-[a-z][a-z0-9]*)/g, "$1.$2");
 
   return key;
+}
+
+/**
+ * Normalize upstream benchmark names for Map indexing before richer matching.
+ * This intentionally avoids provider/date/version heuristics so fetchers all
+ * store keys with the same minimal punctuation and whitespace normalization.
+ */
+export function normalizeForIndex(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[()]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9.\-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 /**
@@ -79,6 +100,11 @@ export function buildKeyToId(
 ): Map<string, string> {
   const keyToId = new Map<string, string>();
   for (const [id, model] of models) {
+    const indexedId = normalizeForIndex(id);
+    if (!keyToId.has(indexedId)) keyToId.set(indexedId, id);
+    const indexedName = normalizeForIndex(model.name);
+    if (!keyToId.has(indexedName)) keyToId.set(indexedName, id);
+
     for (const key of generateMatchKeys(id)) {
       if (!keyToId.has(key)) keyToId.set(key, id);
     }
@@ -99,7 +125,9 @@ export function mergeBenchmarkData(
   sweScores: Map<string, SweBenchEntry>,
   arenaScores: Map<string, ArenaEntry>,
   vlmScores?: Map<string, VlmEntry>,
-  aiderScores?: Map<string, AiderEntry>
+  aiderScores?: Map<string, AiderEntry>,
+  bfclScores?: Map<string, BfclEntry>,
+  speedEntries?: Map<string, SpeedEntry>
 ): void {
   // Build a reverse lookup: normalizedKey → OpenRouter model ID
   const keyToId = buildKeyToId(models);
@@ -116,7 +144,9 @@ export function mergeBenchmarkData(
       !model.benchmarks.sweBenchVerified ||
       sweEntry.resolved > model.benchmarks.sweBenchVerified
     ) {
-      model.benchmarks.sweBenchVerified = sweEntry.resolved;
+      if (Number.isFinite(sweEntry.resolved)) {
+        model.benchmarks.sweBenchVerified = sweEntry.resolved;
+      }
     }
   }
 
@@ -132,7 +162,9 @@ export function mergeBenchmarkData(
       !model.benchmarks.arenaElo ||
       arenaEntry.arenaScore > model.benchmarks.arenaElo
     ) {
-      model.benchmarks.arenaElo = arenaEntry.arenaScore;
+      if (Number.isFinite(arenaEntry.arenaScore)) {
+        model.benchmarks.arenaElo = arenaEntry.arenaScore;
+      }
     }
   }
 
@@ -144,20 +176,22 @@ export function mergeBenchmarkData(
 
       const model = models.get(matchedId);
       if (!model) continue;
+      // A text-only model must not inherit vision benchmarks from a name-colliding VLM entry.
+      if (!model.capabilities.inputModalities.includes("image")) continue;
 
-      if (vlmEntry.mmmu !== undefined && (!model.benchmarks.mmmu || vlmEntry.mmmu > model.benchmarks.mmmu)) {
+      if (vlmEntry.mmmu !== undefined && Number.isFinite(vlmEntry.mmmu) && (!model.benchmarks.mmmu || vlmEntry.mmmu > model.benchmarks.mmmu)) {
         model.benchmarks.mmmu = vlmEntry.mmmu;
       }
-      if (vlmEntry.mmBench !== undefined && (!model.benchmarks.mmBench || vlmEntry.mmBench > model.benchmarks.mmBench)) {
+      if (vlmEntry.mmBench !== undefined && Number.isFinite(vlmEntry.mmBench) && (!model.benchmarks.mmBench || vlmEntry.mmBench > model.benchmarks.mmBench)) {
         model.benchmarks.mmBench = vlmEntry.mmBench;
       }
-      if (vlmEntry.ocrBench !== undefined && (!model.benchmarks.ocrBench || vlmEntry.ocrBench > model.benchmarks.ocrBench)) {
+      if (vlmEntry.ocrBench !== undefined && Number.isFinite(vlmEntry.ocrBench) && (!model.benchmarks.ocrBench || vlmEntry.ocrBench > model.benchmarks.ocrBench)) {
         model.benchmarks.ocrBench = vlmEntry.ocrBench;
       }
-      if (vlmEntry.ai2d !== undefined && (!model.benchmarks.ai2d || vlmEntry.ai2d > model.benchmarks.ai2d)) {
+      if (vlmEntry.ai2d !== undefined && Number.isFinite(vlmEntry.ai2d) && (!model.benchmarks.ai2d || vlmEntry.ai2d > model.benchmarks.ai2d)) {
         model.benchmarks.ai2d = vlmEntry.ai2d;
       }
-      if (vlmEntry.mathVista !== undefined && (!model.benchmarks.mathVista || vlmEntry.mathVista > model.benchmarks.mathVista)) {
+      if (vlmEntry.mathVista !== undefined && Number.isFinite(vlmEntry.mathVista) && (!model.benchmarks.mathVista || vlmEntry.mathVista > model.benchmarks.mathVista)) {
         model.benchmarks.mathVista = vlmEntry.mathVista;
       }
     }
@@ -176,7 +210,61 @@ export function mergeBenchmarkData(
         !model.benchmarks.aiderPolyglot ||
         aiderEntry.passRate2 > model.benchmarks.aiderPolyglot
       ) {
-        model.benchmarks.aiderPolyglot = aiderEntry.passRate2;
+        if (Number.isFinite(aiderEntry.passRate2)) {
+          model.benchmarks.aiderPolyglot = aiderEntry.passRate2;
+        }
+      }
+    }
+  }
+
+  // Merge BFCL V4 agentic benchmark scores
+  if (bfclScores) {
+    for (const [, bfclEntry] of bfclScores) {
+      const matchedId = findMatch(bfclEntry.name, keyToId);
+      if (!matchedId) continue;
+
+      const model = models.get(matchedId);
+      if (!model) continue;
+
+      if (bfclEntry.overall !== undefined && Number.isFinite(bfclEntry.overall) &&
+          (!model.benchmarks.bfclV4Overall || bfclEntry.overall > model.benchmarks.bfclV4Overall)) {
+        model.benchmarks.bfclV4Overall = bfclEntry.overall;
+      }
+      if (bfclEntry.agentic !== undefined && Number.isFinite(bfclEntry.agentic) &&
+          (!model.benchmarks.bfclV4Agentic || bfclEntry.agentic > model.benchmarks.bfclV4Agentic)) {
+        model.benchmarks.bfclV4Agentic = bfclEntry.agentic;
+      }
+      if (bfclEntry.multiTurn !== undefined && Number.isFinite(bfclEntry.multiTurn) &&
+          (!model.benchmarks.bfclV4MultiTurn || bfclEntry.multiTurn > model.benchmarks.bfclV4MultiTurn)) {
+        model.benchmarks.bfclV4MultiTurn = bfclEntry.multiTurn;
+      }
+      if (bfclEntry.singleTurn !== undefined && Number.isFinite(bfclEntry.singleTurn) &&
+          (!model.benchmarks.bfclV4SingleTurn || bfclEntry.singleTurn > model.benchmarks.bfclV4SingleTurn)) {
+        model.benchmarks.bfclV4SingleTurn = bfclEntry.singleTurn;
+      }
+      if (bfclEntry.cost !== undefined && Number.isFinite(bfclEntry.cost) &&
+          (!model.benchmarks.bfclV4Cost || bfclEntry.cost < model.benchmarks.bfclV4Cost)) {
+        model.benchmarks.bfclV4Cost = bfclEntry.cost;
+      }
+    }
+  }
+
+  // Merge speed/latency data
+  if (speedEntries) {
+    for (const [, speedEntry] of speedEntries) {
+      const matchedId = findMatch(speedEntry.name, keyToId);
+      if (!matchedId) continue;
+
+      const model = models.get(matchedId);
+      if (!model) continue;
+
+      if (speedEntry.outputTokensPerSecond !== undefined && Number.isFinite(speedEntry.outputTokensPerSecond)) {
+        model.speed.outputTokensPerSecond = speedEntry.outputTokensPerSecond;
+        model.benchmarks.outputTokensPerSecond = speedEntry.outputTokensPerSecond;
+      }
+      if (speedEntry.timeToFirstToken !== undefined && Number.isFinite(speedEntry.timeToFirstToken)) {
+        model.speed.timeToFirstToken = speedEntry.timeToFirstToken;
+        model.benchmarks.timeToFirstToken = speedEntry.timeToFirstToken;
       }
     }
   }
@@ -206,10 +294,10 @@ export function findMatch(
   for (const [indexedKey, id] of keyToId) {
     if (primaryKey.length < 6 || indexedKey.length < 6) continue;
     if (indexedKey.includes(primaryKey) || primaryKey.includes(indexedKey)) {
-      // A vision-variant name (e.g. "deepseek-vl-7b") must not collapse onto a
-      // non-vision base model ("deepseek-chat" → stem "deepseek"); they are
-      // different models. The reverse (Qwen2.5-VL ↔ qwen2.5-vl-72b-instruct) is fine.
-      if (primaryIsVision && !hasVisionToken(indexedKey)) continue;
+      // Vision and non-vision model lines must not collapse into each other.
+      // "DeepSeek-VL-7B" is not "deepseek-chat", and a base "Qwen2.5" score
+      // must not attach to "qwen2.5-vl-72b-instruct".
+      if (primaryIsVision !== hasVisionToken(indexedKey)) continue;
       return id;
     }
   }

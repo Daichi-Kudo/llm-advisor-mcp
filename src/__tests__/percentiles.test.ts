@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computePercentiles } from "../data/percentiles.js";
+import { computePercentiles, getBlendedTokenPrice, getCompositeBenchmarkScore, getCostEfficiencyScore } from "../data/percentiles.js";
 import type { UnifiedModel } from "../types.js";
 
 function makeModel(
@@ -31,12 +31,48 @@ function makeModel(
       isOpenSource: false,
     },
     percentiles: {},
+    speed: {},
     lastUpdated: new Date().toISOString(),
   };
 }
 
+describe("getCompositeBenchmarkScore", () => {
+  it("merges multiple coding sources instead of taking only the first available score", () => {
+    const model = makeModel("mixed-coder", {
+      benchmarks: {
+        sweBenchVerified: 60,
+        aiderPolyglot: 90,
+        arenaElo: 1400,
+      },
+    });
+
+    // SWE 60*2 + Aider 90*2 + normalized Arena 100*1 = 400 / 5
+    expect(getCompositeBenchmarkScore(model, "coding")).toBe(80);
+  });
+
+  it("returns undefined when a category has no source data", () => {
+    expect(getCompositeBenchmarkScore(makeModel("empty"), "coding")).toBeUndefined();
+  });
+
+  it("uses composite performance for cost efficiency", () => {
+    const model = makeModel("efficient", {
+      benchmarks: { arenaElo: 1400, sweBenchVerified: 75 },
+      pricing: { input: 1, output: 3 },
+    });
+
+    expect(getCostEfficiencyScore(model)).toBeGreaterThan(0);
+  });
+});
+
+describe("getBlendedTokenPrice", () => {
+  it("rounds binary floating-point artifacts in weighted price calculations", () => {
+    const model = makeModel("float-price", { pricing: { input: 0.1, output: 0.3 } });
+    expect(getBlendedTokenPrice(model)).toBe(0.15);
+  });
+});
+
 describe("computePercentiles", () => {
-  it("assigns coding percentiles based on SWE-bench and Aider scores", () => {
+  it("assigns coding percentiles based on SWE-bench scores", () => {
     const models = new Map<string, UnifiedModel>();
     models.set("low", makeModel("low", { benchmarks: { sweBenchVerified: 30 } }));
     models.set("mid", makeModel("mid", { benchmarks: { sweBenchVerified: 50 } }));
@@ -58,6 +94,7 @@ describe("computePercentiles", () => {
     computePercentiles(models);
 
     expect(models.get("a")!.percentiles.general).toBe(0);
+    expect(models.get("b")!.percentiles.general).toBe(50);
     expect(models.get("c")!.percentiles.general).toBe(100);
   });
 
@@ -107,6 +144,7 @@ describe("computePercentiles", () => {
 
     // Both tied models should have the same percentile
     expect(models.get("a")!.percentiles.coding).toBe(models.get("b")!.percentiles.coding);
+    expect(models.get("a")!.percentiles.coding).toBe(0);
     expect(models.get("c")!.percentiles.coding).toBe(100);
   });
 
@@ -152,13 +190,23 @@ describe("computePercentiles", () => {
     expect(models.get("free")!.percentiles.costEfficiency).toBeUndefined();
   });
 
-  it("handles single model (percentile = 0)", () => {
+  it("handles single scored model as top percentile", () => {
     const models = new Map<string, UnifiedModel>();
     models.set("only", makeModel("only", { benchmarks: { sweBenchVerified: 50 } }));
 
     computePercentiles(models);
 
-    // Single model: lowerCount=0, total-1=0, division by (0||1) = 0
-    expect(models.get("only")!.percentiles.coding).toBe(0);
+    expect(models.get("only")!.percentiles.coding).toBe(100);
+  });
+
+  it("ignores non-finite benchmark scores when computing percentiles", () => {
+    const models = new Map<string, UnifiedModel>();
+    models.set("bad", makeModel("bad", { benchmarks: { sweBenchVerified: NaN } }));
+    models.set("good", makeModel("good", { benchmarks: { sweBenchVerified: 50 } }));
+
+    computePercentiles(models);
+
+    expect(models.get("bad")!.percentiles.coding).toBeUndefined();
+    expect(models.get("good")!.percentiles.coding).toBe(100);
   });
 });

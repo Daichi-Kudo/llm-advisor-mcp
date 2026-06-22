@@ -1,4 +1,7 @@
 import type { InMemoryCache } from "../cache.js";
+import { SERVER_NAME, SERVER_VERSION } from "../../metadata.js";
+import { normalizeForIndex } from "../normalizer.js";
+import { readResponseJson } from "./http.js";
 
 // Was opencompass.openxlab.space, whose TLS cert expired 2026-04-16 (Node rejects
 // it, silently zeroing out all VLM scores). cdn.opencompass.org.cn serves the
@@ -6,6 +9,8 @@ import type { InMemoryCache } from "../cache.js";
 const API_URL = "https://cdn.opencompass.org.cn/assets/OpenVLM.json";
 const CACHE_KEY = "vlm:opencompass";
 const TTL = 6 * 60 * 60 * 1000; // 6 hours
+const MAX_RESPONSE_BYTES = 15 * 1024 * 1024;
+const MAX_STALE_MS = 24 * 60 * 60 * 1000;
 
 export interface VlmEntry {
   name: string;
@@ -53,18 +58,24 @@ export async function fetchVlmScores(
   const cached = cache.get<Map<string, VlmEntry>>(CACHE_KEY);
   if (cached) return cached;
 
-  const stale = cache.getStaleOrNull<Map<string, VlmEntry>>(CACHE_KEY);
+  const stale = cache.getStaleOrNull<Map<string, VlmEntry>>(CACHE_KEY, MAX_STALE_MS);
 
   try {
     const response = await fetch(API_URL, {
-      signal: AbortSignal.timeout(30_000), // 30s — file is ~6.5MB
+      headers: { "User-Agent": `${SERVER_NAME}/${SERVER_VERSION}` },
+      redirect: "error",
+      signal: AbortSignal.timeout(15_000), // file is ~6.5MB; keep warmup bounded with other sources
     });
 
     if (!response.ok) {
       throw new Error(`OpenCompass VLM API returned ${response.status}`);
     }
 
-    const data = (await response.json()) as OpenVlmResponse;
+    const data = await readResponseJson<OpenVlmResponse>(
+      response,
+      MAX_RESPONSE_BYTES,
+      "OpenCompass VLM API"
+    );
 
     if (!data.results || typeof data.results !== "object") {
       throw new Error("Invalid OpenCompass VLM response: no results");
@@ -95,7 +106,7 @@ export async function fetchVlmScores(
       const displayName = extractDisplayName(modelData.META?.Method, modelName);
       const org = modelData.META?.Org;
 
-      scores.set(normalizeVlmName(displayName), {
+      scores.set(normalizeForIndex(displayName), {
         name: displayName,
         mmmu,
         mmBench,
@@ -109,6 +120,7 @@ export async function fetchVlmScores(
     cache.set(CACHE_KEY, scores, TTL, "opencompass");
     return scores;
   } catch (error) {
+    console.error(`OpenCompass VLM fetch failed: ${error instanceof Error ? error.message : String(error)}`);
     if (stale) return stale.data;
     return new Map();
   }
@@ -118,18 +130,22 @@ export async function fetchVlmScores(
 // Helpers
 // ============================================================
 
-/** Extract a numeric score from a benchmark object */
-function extractScore(
+/**
+ * Extract a numeric score from a benchmark object.
+ *
+ * @internal Exported for parser regression tests only; not part of the public MCP API.
+ */
+export function extractScore(
   benchData: unknown,
   scoreKey: string
 ): number | undefined {
   if (!benchData || typeof benchData !== "object") return undefined;
   const obj = benchData as Record<string, unknown>;
   const val = obj[scoreKey];
-  if (typeof val === "number" && val > 0) return val;
+  if (typeof val === "number" && Number.isFinite(val) && val >= 0) return val;
   if (typeof val === "string") {
     const parsed = parseFloat(val);
-    if (!isNaN(parsed) && parsed > 0) return parsed;
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
   }
   return undefined;
 }
@@ -137,8 +153,10 @@ function extractScore(
 /**
  * Extract display name from META.Method field.
  * Method can be ["ModelName", "url"] or just "ModelName".
+ *
+ * @internal Exported for parser regression tests only; not part of the public MCP API.
  */
-function extractDisplayName(
+export function extractDisplayName(
   method: [string, string?] | string | unknown,
   fallback: string
 ): string {
@@ -147,15 +165,4 @@ function extractDisplayName(
   }
   if (typeof method === "string") return method;
   return fallback;
-}
-
-/** Normalize VLM model names for matching */
-function normalizeVlmName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[()]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9.\-]/g, "")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
 }

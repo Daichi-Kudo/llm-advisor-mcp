@@ -1,49 +1,71 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ModelRegistry } from "../data/registry.js";
-import type { UnifiedModel, UseCase } from "../types.js";
-import { fmtPrice, fmtContext, fmtScore, fmtElo, freshnessFooter } from "./formatters.js";
+import { ModelRegistry, modelMatchesFilters } from "../data/registry.js";
+import { USE_CASES, type UnifiedModel, type UseCase } from "../types.js";
+import { fmtPrice, fmtContext, fmtScore, fmtElo, freshnessFooter, escapeMarkdownInline } from "./formatters.js";
+import {
+  getBlendedTokenPrice,
+  getCompositeBenchmarkScore,
+  getOverallBenchmarkScore,
+} from "../data/percentiles.js";
+import { MCP_REGISTRY_NAME, SERVER_VERSION } from "../metadata.js";
+import { ensureRegistryLoaded, isoDateSchema } from "./schemas.js";
 
 export function registerRecommendTool(
   server: McpServer,
   registry: ModelRegistry
 ): void {
-  server.tool(
+  server.registerTool(
     "recommend_model",
-    "Get personalized model recommendations based on use case, budget, and requirements. " +
-      "Returns top 3 picks with reasoning (~350 tokens).",
     {
-      use_case: z
-        .enum(["coding", "math", "general", "vision", "creative", "reasoning", "cost-effective"])
-        .describe("Primary use case"),
-      max_input_price: z
-        .number()
-        .optional()
-        .describe("Max input price in USD per 1M tokens"),
-      max_output_price: z
-        .number()
-        .optional()
-        .describe("Max output price in USD per 1M tokens"),
-      min_context: z
-        .number()
-        .optional()
-        .describe("Minimum context window in tokens"),
-      require_vision: z
-        .boolean()
-        .optional()
-        .describe("Require vision/image input support"),
-      require_tools: z
-        .boolean()
-        .optional()
-        .describe("Require function/tool calling support"),
-      require_open_source: z
-        .boolean()
-        .optional()
-        .describe("Require open-source license"),
-      min_release_date: z
-        .string()
-        .optional()
-        .describe("Minimum release date (YYYY-MM-DD). Excludes older models"),
+      title: "Recommend model",
+      description:
+        `Get personalized model recommendations based on use case, budget, and requirements (llm-advisor ${SERVER_VERSION}, MCP registry ${MCP_REGISTRY_NAME}). ` +
+        "The creative use case currently falls back to the general composite benchmark because no dedicated creative leaderboard is available. " +
+        "Returns top 3 picks with reasoning (~350-550 tokens).",
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+      inputSchema: {
+        use_case: z.enum(USE_CASES).describe("Primary use case"),
+        max_input_price: z
+          .number()
+          .min(0)
+          .max(1_000_000)
+          .optional()
+          .describe("Max input price in USD per 1M tokens"),
+        max_output_price: z
+          .number()
+          .min(0)
+          .max(1_000_000)
+          .optional()
+          .describe("Max output price in USD per 1M tokens"),
+        min_context: z
+          .number()
+          .int()
+          .min(1)
+          .max(100_000_000)
+          .optional()
+          .describe("Minimum context window in tokens"),
+        require_vision: z
+          .boolean()
+          .optional()
+          .describe("Require vision/image input support"),
+        require_tools: z
+          .boolean()
+          .optional()
+          .describe("Require function/tool calling support"),
+        require_open_source: z
+          .boolean()
+          .optional()
+          .describe("Require open-source license"),
+        min_release_date: isoDateSchema
+          .optional()
+          .describe("Minimum release date (YYYY-MM-DD). Excludes older models"),
+      },
     },
     async ({
       use_case,
@@ -55,45 +77,27 @@ export function registerRecommendTool(
       require_open_source,
       min_release_date,
     }) => {
-      await registry.ensureLoaded();
+      const loadError = await ensureRegistryLoaded(registry);
+      if (loadError) return loadError;
 
-      let candidates = registry.getAllModels();
-
-      // Apply hard filters
-      if (max_input_price !== undefined) {
-        candidates = candidates.filter((m) => m.pricing.input <= max_input_price);
-      }
-      if (max_output_price !== undefined) {
-        candidates = candidates.filter((m) => m.pricing.output <= max_output_price);
-      }
-      if (min_context !== undefined) {
-        candidates = candidates.filter(
-          (m) => m.capabilities.contextLength >= min_context
-        );
-      }
-      if (require_vision) {
-        candidates = candidates.filter((m) =>
-          m.capabilities.inputModalities.includes("image")
-        );
-      }
-      if (require_tools) {
-        candidates = candidates.filter((m) => m.capabilities.supportsTools);
-      }
-      if (require_open_source) {
-        candidates = candidates.filter((m) => m.metadata.isOpenSource);
-      }
-      if (min_release_date) {
-        candidates = candidates.filter(
-          (m) => m.metadata.releaseDate !== undefined && m.metadata.releaseDate >= min_release_date
-        );
-      }
+      const candidates = registry.getAllModels().filter((m) =>
+        modelMatchesFilters(m, {
+          maxInputPrice: max_input_price,
+          maxOutputPrice: max_output_price,
+          minContext: min_context,
+          minReleaseDate: min_release_date,
+          requireVision: require_vision,
+          requireTools: require_tools,
+          requireOpenSource: require_open_source,
+        })
+      );
 
       if (candidates.length === 0) {
         return {
           content: [
             {
               type: "text" as const,
-              text: "No models match your criteria. Try relaxing the budget or requirements.",
+              text: "No models found matching your requirements. Try increasing budget or reducing constraints.",
             },
           ],
         };
@@ -101,8 +105,8 @@ export function registerRecommendTool(
 
       // Score and rank
       const scored = candidates
-        .map((m) => ({ model: m, score: computeScore(m, use_case as UseCase) }))
-        .sort((a, b) => b.score - a.score)
+        .map((m) => ({ model: m, score: computeScore(m, use_case) }))
+        .sort((a, b) => b.score - a.score || a.model.id.localeCompare(b.model.id))
         .slice(0, 3);
 
       const fetchedAt = registry.getCacheFreshnessMs();
@@ -126,7 +130,7 @@ function computeScore(model: UnifiedModel, useCase: UseCase): number {
 
   // Price component (inversely proportional — cheaper is better)
   // Normalize: $0 = 100 points, $30/1M = 0 points
-  const blended = model.pricing.input * 0.6 + model.pricing.output * 0.4;
+  const blended = getBlendedTokenPrice(model);
   const priceScore = Math.max(0, 100 - (blended / 30) * 100);
   score += priceScore * weights.price;
 
@@ -147,6 +151,8 @@ export function computeFreshnessBonus(releaseDate?: string): number {
   const released = new Date(releaseDate).getTime();
   if (isNaN(released)) return 0;
   const ageMs = Date.now() - released;
+  // Future release dates get no bonus
+  if (ageMs < 0) return 0;
   const ageDays = ageMs / (1000 * 60 * 60 * 24);
   if (ageDays <= 90) return 3;   // Last 3 months
   if (ageDays <= 180) return 1;  // Last 6 months
@@ -181,25 +187,23 @@ function getWeights(useCase: UseCase): Weights {
 function getBenchmarkScore(model: UnifiedModel, useCase: UseCase): number {
   switch (useCase) {
     case "coding":
-      return model.benchmarks.sweBenchVerified ?? model.benchmarks.aiderPolyglot ?? (model.benchmarks.arenaElo ? normalizeElo(model.benchmarks.arenaElo) : 0);
+      return getCompositeBenchmarkScore(model, "coding") ?? 0;
     case "math":
+      return getCompositeBenchmarkScore(model, "math") ?? 0;
     case "reasoning":
-      return model.benchmarks.gpqaDiamond ?? model.benchmarks.math500 ?? (model.benchmarks.arenaElo ? normalizeElo(model.benchmarks.arenaElo) : 0);
+      return getCompositeBenchmarkScore(model, "reasoning") ?? 0;
     case "vision":
-      return model.benchmarks.mmmu ?? 0;
+      return getCompositeBenchmarkScore(model, "vision") ?? 0;
     case "general":
+      return getCompositeBenchmarkScore(model, "general") ?? 0;
     case "creative":
-      return model.benchmarks.arenaElo ? normalizeElo(model.benchmarks.arenaElo) : (model.benchmarks.mmluPro ?? 0);
+      // Creative reuses the general benchmark composite; there is no dedicated creative leaderboard yet.
+      return getCompositeBenchmarkScore(model, "creative") ?? 0;
     case "cost-effective":
-      return model.benchmarks.arenaElo ? normalizeElo(model.benchmarks.arenaElo) : 0;
+      return getOverallBenchmarkScore(model) ?? 0;
     default:
-      return model.benchmarks.arenaElo ? normalizeElo(model.benchmarks.arenaElo) : 0;
+      return getCompositeBenchmarkScore(model, "general") ?? 0;
   }
-}
-
-/** Normalize Arena Elo (900-1500) to a 0-100 scale */
-function normalizeElo(elo: number): number {
-  return Math.max(0, Math.min(100, ((elo - 900) / 600) * 100));
 }
 
 function formatRecommendations(
@@ -208,7 +212,7 @@ function formatRecommendations(
   fetchedAt?: number
 ): string {
   const lines: string[] = [];
-  lines.push(`## Recommended for: ${useCase}`);
+  lines.push(`## Recommended for: ${escapeMarkdownInline(useCase)}`);
   lines.push("");
 
   for (let i = 0; i < scored.length; i++) {
@@ -216,7 +220,7 @@ function formatRecommendations(
     const medal = ["1.", "2.", "3."][i];
 
     lines.push(
-      `### ${medal} ${model.id} (score: ${score.toFixed(0)})`
+      `### ${medal} ${escapeMarkdownInline(model.id)} (score: ${score.toFixed(0)})`
     );
 
     // Compact summary line
@@ -231,20 +235,23 @@ function formatRecommendations(
 
     // Key benchmarks for this use case
     const benchParts: string[] = [];
-    if (model.benchmarks.sweBenchVerified) {
+    if (model.benchmarks.sweBenchVerified !== undefined) {
       benchParts.push(`SWE-bench: ${fmtScore(model.benchmarks.sweBenchVerified)}`);
     }
-    if (model.benchmarks.aiderPolyglot) {
+    if (model.benchmarks.aiderPolyglot !== undefined) {
       benchParts.push(`Aider: ${fmtScore(model.benchmarks.aiderPolyglot)}`);
     }
-    if (model.benchmarks.arenaElo) {
+    if (model.benchmarks.arenaElo !== undefined) {
       benchParts.push(`Arena: ${fmtElo(model.benchmarks.arenaElo)}`);
     }
-    if (model.benchmarks.gpqaDiamond) {
+    if (model.benchmarks.gpqaDiamond !== undefined) {
       benchParts.push(`GPQA: ${fmtScore(model.benchmarks.gpqaDiamond)}`);
     }
-    if (model.benchmarks.mmmu) {
+    if (model.benchmarks.mmmu !== undefined) {
       benchParts.push(`MMMU: ${fmtScore(model.benchmarks.mmmu)}`);
+    }
+    if (model.benchmarks.bfclV4Overall !== undefined) {
+      benchParts.push(`BFCL: ${fmtScore(model.benchmarks.bfclV4Overall)}`);
     }
     if (benchParts.length > 0) {
       lines.push(`Benchmarks: ${benchParts.join(", ")}`);
@@ -257,7 +264,6 @@ function formatRecommendations(
     if (model.capabilities.supportsTools) strengths.push("tools");
     if (model.capabilities.inputModalities.includes("image")) strengths.push("vision");
     if (model.capabilities.contextLength >= 1_000_000) strengths.push("1M+ context");
-    if (model.pricing.input === 0 && model.pricing.output === 0) strengths.push("free");
     if (strengths.length > 0) {
       lines.push(`Strengths: ${strengths.join(", ")}`);
     }

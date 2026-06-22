@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeKey, mergeBenchmarkData, buildKeyToId, findMatch } from "../data/normalizer.js";
+import { normalizeKey, normalizeForIndex, mergeBenchmarkData, buildKeyToId, findMatch } from "../data/normalizer.js";
 import type { UnifiedModel } from "../types.js";
 import type { SweBenchEntry } from "../data/fetchers/swe-bench.js";
 import type { ArenaEntry } from "../data/fetchers/arena.js";
@@ -20,11 +20,16 @@ describe("normalizeKey", () => {
   it("strips date suffixes", () => {
     expect(normalizeKey("gpt-5.2-20260210")).toBe("gpt-5.2");
     expect(normalizeKey("claude-sonnet-4-2025-11-18")).toBe("claude-sonnet-4");
+    expect(normalizeKey("gpt-4-2024")).toBe("gpt-4");
+    expect(normalizeKey("command-r-12-2024")).toBe("command-r");
   });
 
   it("normalizes hyphens to dots for version numbers", () => {
     expect(normalizeKey("claude-opus-4-6")).toBe("claude-opus-4.6");
     expect(normalizeKey("gemini-3-1-pro")).toBe("gemini-3.1-pro");
+    expect(normalizeKey("claude-3-5-haiku")).toBe("claude-3.5-haiku");
+    expect(normalizeKey("gpt-4-1-mini")).toBe("gpt-4.1-mini");
+    expect(normalizeKey("gemini-2-5-flash")).toBe("gemini-2.5-flash");
   });
 
   it("strips -thinking suffix", () => {
@@ -34,8 +39,14 @@ describe("normalizeKey", () => {
 
   it("strips -chat and -latest but keeps -preview and -mini", () => {
     expect(normalizeKey("gpt-5.2-chat-latest")).toBe("gpt-5.2");
-    expect(normalizeKey("gpt-5.2-preview")).toContain("preview");
-    expect(normalizeKey("gpt-5.2-mini")).toContain("mini");
+    expect(normalizeKey("gpt-5.2-preview")).toBe("gpt-5.2-preview");
+    expect(normalizeKey("gpt-5.2-mini")).toBe("gpt-5.2-mini");
+  });
+
+  it("does not strip high, medium, or low inside model names", () => {
+    expect(normalizeKey("example-high-v2")).toBe("example-high-v2");
+    expect(normalizeKey("example-medium-v2")).toBe("example-medium-v2");
+    expect(normalizeKey("example-low-v2")).toBe("example-low-v2");
   });
 
   it("lowercases and normalizes whitespace", () => {
@@ -46,6 +57,13 @@ describe("normalizeKey", () => {
   it("handles already-clean names", () => {
     expect(normalizeKey("claude-opus-4.6")).toBe("claude-opus-4.6");
     expect(normalizeKey("gpt-5.2")).toBe("gpt-5.2");
+  });
+});
+
+describe("normalizeForIndex", () => {
+  it("applies shared lightweight benchmark-key normalization", () => {
+    expect(normalizeForIndex("Claude 4.5 Opus (Preview)")).toBe("claude-4.5-opus-preview");
+    expect(normalizeForIndex("GPT_5.1 Turbo!!")).toBe("gpt5.1-turbo");
   });
 });
 
@@ -75,6 +93,7 @@ describe("mergeBenchmarkData", () => {
         isOpenSource: false,
       },
       percentiles: {},
+      speed: {},
       lastUpdated: new Date().toISOString(),
     };
   }
@@ -198,6 +217,7 @@ describe("findMatch", () => {
       },
       metadata: { provider: "test", family: "test", isOpenSource: false },
       percentiles: {},
+      speed: {},
       lastUpdated: "2026-01-01T00:00:00.000Z",
     };
   }
@@ -221,6 +241,10 @@ describe("findMatch", () => {
   it("does not match a VL/vision variant to a non-vision base model", () => {
     expect(findMatch("DeepSeek-VL-7B", keyToId)).toBeNull();
     expect(findMatch("DeepSeek-VL2", keyToId)).toBeNull();
+  });
+
+  it("does not match a non-vision base name to a VL/vision indexed model", () => {
+    expect(findMatch("Qwen2.5", keyToId)).toBeNull();
   });
 
   it("still matches legitimate models (exact and substring)", () => {
